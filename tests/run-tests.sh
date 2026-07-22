@@ -146,5 +146,31 @@ rm -f "$P/$DOC"
 expect_all "status verified thieu dossier -> ./init.sh all fail" 1 "$P"
 
 echo ""
+echo "== _TEMPLATE.md =="
+
+P="$(new_project)"
+T="$P/docs/features/_TEMPLATE.md"
+
+if [ -f "$T" ]; then ok "bootstrap copy docs/features/_TEMPLATE.md"; else ng "bootstrap copy docs/features/_TEMPLATE.md"; fi
+
+nums="$(grep -E '^##[[:space:]]+[1-8]\.' "$T" 2>/dev/null \
+  | sed -E 's/^##[[:space:]]+([1-8])\..*/\1/' | tr '\n' ',' | sed 's/,$//')"
+if [ "$nums" = "1,2,3,4,5,6,7,8" ]; then
+  ok "_TEMPLATE.md du 8 muc dung thu tu"
+else
+  ng "_TEMPLATE.md 8 muc dung thu tu (dang co: ${nums:-khong co})"
+fi
+
+if grep -q '<TODO:' "$T" 2>/dev/null; then ok "_TEMPLATE.md dung marker <TODO:"; else ng "_TEMPLATE.md thieu marker <TODO:"; fi
+if grep -q '<!--' "$T" 2>/dev/null; then ok "_TEMPLATE.md co chu thich huong dan"; else ng "_TEMPLATE.md thieu chu thich huong dan"; fi
+if grep -q 'zoom out' "$T" 2>/dev/null && grep -q 'zoom in' "$T" 2>/dev/null; then
+  ok "_TEMPLATE.md giai thich ranh gioi muc 1 vs muc 2"
+else
+  ng "_TEMPLATE.md giai thich ranh gioi muc 1 vs muc 2"
+fi
+
+expect_docs "_TEMPLATE.md khong bi quet (khong feature nao tro toi) -> pass" 0 "$P"
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi
