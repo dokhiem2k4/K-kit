@@ -1,0 +1,17 @@
+# harness-kit — ví dụ giá trị token (tham khảo; bootstrap nhận qua flag, không đọc file này)
+#
+# node bootstrap.mjs \
+#   --target "D:/dev/My-Next-Project" \
+#   --name "My Project" \
+#   --tagline "Mô tả 1 dòng đề tài." \
+#   --stack "Next.js 15 + Supabase + Chrome MV3" \
+#   --blueprint "docs/specs/blueprint.md" \
+#   --memory-dir ".claude/memory/"
+#
+# Token thay trong mọi file template:
+#   {{PROJECT_NAME}}   -> --name       (bắt buộc)
+#   {{TAGLINE}}        -> --tagline
+#   {{STACK}}          -> --stack
+#   {{BLUEPRINT_PATH}} -> --blueprint  (default docs/specs/blueprint.md)
+#   {{MEMORY_DIR}}     -> --memory-dir (default .claude/memory/)
+#   {{DATE}}           -> hôm nay (tự động)

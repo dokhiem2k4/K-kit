@@ -1,0 +1,47 @@
+{
+  "project": "{{PROJECT_NAME}}",
+  "blueprint": "{{BLUEPRINT_PATH}}",
+  "workflow": ".claude/workflow/pipeline.md",
+  "active_feature": "F01",
+  "legend": {
+    "status": ["pending", "in_progress", "blocked", "done", "verified", "deferred"],
+    "rule": "One feature at a time. 'done' needs evidence in progress.md. dependencies phai done truoc. Thay vi du duoi bang feature that cua {{PROJECT_NAME}}."
+  },
+  "_howto": "Moi feature CAN co: id, name, description, status (bat buoc cho validator). Them scope/done_when/verify de Builder biet ranh gioi + tieu chi test. done_when phai testable. dependencies = list id phai xong truoc.",
+  "features": [
+    {
+      "id": "F01",
+      "name": "Scaffold project",
+      "description": "Dung skeleton du an ({{STACK}}): cau truc thu muc theo Blueprint + .env.example + README. Build rong pass.",
+      "dependencies": [],
+      "status": "pending",
+      "scope": ["cau truc thu muc theo Blueprint", ".env.example (liet ke moi secret/config)", "README.md", "config build/lint/test"],
+      "done_when": [
+        "cai dependencies sach",
+        "build skeleton pass",
+        ".env.example liet ke du moi bien can"
+      ],
+      "verify": ["./init.sh scaffold"]
+    },
+    {
+      "id": "F02",
+      "name": "Data layer",
+      "description": "Schema/DB + migrations + rang buoc access (RLS/authz) neu co. Thay bang thuc te.",
+      "dependencies": ["F01"],
+      "status": "pending",
+      "scope": ["schema + migrations", "access control (RLS/authz)", "seed/fixtures neu can"],
+      "done_when": ["migration apply sach", "access control chan cross-user (test)"],
+      "verify": ["security.md: data isolation"]
+    },
+    {
+      "id": "F03",
+      "name": "Auth",
+      "description": "Dang nhap/dang xuat + protected routes + endpoint me/profile. Thay bang thuc te.",
+      "dependencies": ["F01", "F02"],
+      "status": "pending",
+      "scope": ["login/logout", "protected routes / guard", "GET me/profile"],
+      "done_when": ["endpoint bao ve thieu token -> 401", "route bao ve redirect khi chua login"],
+      "verify": ["security.md: authz", "./init.sh"]
+    }
+  ]
+}
