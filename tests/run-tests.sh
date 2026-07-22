@@ -172,5 +172,36 @@ fi
 expect_docs "_TEMPLATE.md khong bi quet (khong feature nao tro toi) -> pass" 0 "$P"
 
 echo ""
+echo "== feature_list.json =="
+
+P="$(new_project)"
+
+missing="$(node -e '
+const j = require(process.argv[1] + "/feature_list.json");
+console.log(j.features.filter(f => !f.doc).map(f => f.id).join(","));
+' "$(win "$P")")"
+if [ -z "$missing" ]; then ok "moi feature mau co field doc"; else ng "feature thieu doc: $missing"; fi
+
+wrong="$(node -e '
+const j = require(process.argv[1] + "/feature_list.json");
+const bad = j.features.filter(f => !new RegExp("^docs/features/" + f.id + "-[a-z0-9-]+\\.md$").test(f.doc || ""));
+console.log(bad.map(f => f.id).join(","));
+' "$(win "$P")")"
+if [ -z "$wrong" ]; then ok "doc dung quy uoc docs/features/<ID>-<slug>.md"; else ng "doc sai quy uoc: $wrong"; fi
+
+noverify="$(node -e '
+const j = require(process.argv[1] + "/feature_list.json");
+const bad = j.features.filter(f => !(f.verify || []).includes("./init.sh docs"));
+console.log(bad.map(f => f.id).join(","));
+' "$(win "$P")")"
+if [ -z "$noverify" ]; then ok "feature mau co ./init.sh docs trong verify"; else ng "thieu ./init.sh docs trong verify: $noverify"; fi
+
+hint="$(node -e '
+const j = require(process.argv[1] + "/feature_list.json");
+console.log(String(j._howto || "").includes("doc") ? "yes" : "no");
+' "$(win "$P")")"
+if [ "$hint" = "yes" ]; then ok "_howto giai thich field doc"; else ng "_howto giai thich field doc"; fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi

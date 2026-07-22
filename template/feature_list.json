@@ -7,7 +7,7 @@
     "status": ["pending", "in_progress", "blocked", "done", "verified", "deferred"],
     "rule": "One feature at a time. 'done' needs evidence in progress.md. dependencies phai done truoc. Thay vi du duoi bang feature that cua {{PROJECT_NAME}}."
   },
-  "_howto": "Moi feature CAN co: id, name, description, status (bat buoc cho validator). Them scope/done_when/verify de Builder biet ranh gioi + tieu chi test. done_when phai testable. dependencies = list id phai xong truoc.",
+  "_howto": "Moi feature CAN co: id, name, description, status (bat buoc cho validator). Them scope/done_when/verify de Builder biet ranh gioi + tieu chi test. done_when phai testable. dependencies = list id phai xong truoc. doc = duong dan dossier docs/features/<ID>-<slug>.md, BAT BUOC khi status done/verified — ./init.sh docs se check du 8 muc, dung thu tu, khong con placeholder.",
   "features": [
     {
       "id": "F01",
@@ -15,13 +15,14 @@
       "description": "Dung skeleton du an ({{STACK}}): cau truc thu muc theo Blueprint + .env.example + README. Build rong pass.",
       "dependencies": [],
       "status": "pending",
+      "doc": "docs/features/F01-scaffold.md",
       "scope": ["cau truc thu muc theo Blueprint", ".env.example (liet ke moi secret/config)", "README.md", "config build/lint/test"],
       "done_when": [
         "cai dependencies sach",
         "build skeleton pass",
         ".env.example liet ke du moi bien can"
       ],
-      "verify": ["./init.sh scaffold"]
+      "verify": ["./init.sh scaffold", "./init.sh docs"]
     },
     {
       "id": "F02",
@@ -29,9 +30,10 @@
       "description": "Schema/DB + migrations + rang buoc access (RLS/authz) neu co. Thay bang thuc te.",
       "dependencies": ["F01"],
       "status": "pending",
+      "doc": "docs/features/F02-data-layer.md",
       "scope": ["schema + migrations", "access control (RLS/authz)", "seed/fixtures neu can"],
       "done_when": ["migration apply sach", "access control chan cross-user (test)"],
-      "verify": ["security.md: data isolation"]
+      "verify": ["security.md: data isolation", "./init.sh docs"]
     },
     {
       "id": "F03",
@@ -39,9 +41,10 @@
       "description": "Dang nhap/dang xuat + protected routes + endpoint me/profile. Thay bang thuc te.",
       "dependencies": ["F01", "F02"],
       "status": "pending",
+      "doc": "docs/features/F03-auth.md",
       "scope": ["login/logout", "protected routes / guard", "GET me/profile"],
       "done_when": ["endpoint bao ve thieu token -> 401", "route bao ve redirect khi chua login"],
-      "verify": ["security.md: authz", "./init.sh"]
+      "verify": ["security.md: authz", "./init.sh", "./init.sh docs"]
     }
   ]
 }
