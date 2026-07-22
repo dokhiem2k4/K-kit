@@ -6,6 +6,7 @@ Stack: **{{STACK}}**.
 ## Source of truth
 - **Blueprint (design đã duyệt):** `{{BLUEPRINT_PATH}}` — kiến trúc, data model, API, luồng. KHÔNG đổi kiến trúc mà không quay lại VISION.
 - **State:** `feature_list.json` (feature đang làm, done chưa) + `progress.md`.
+- **Feature dossier:** `docs/features/<ID>-<slug>.md` — hồ sơ từng feature đã ship (8 mục: ý nghĩa với dự án, làm được gì, cách dùng, bên trong, quyết định, cạm bẫy, bằng chứng, cập nhật). Đường dẫn nằm ở field `doc` trong `feature_list.json`. Template: `docs/features/_TEMPLATE.md`.
 - **Workflow mở rộng:** `.claude/workflow/pipeline.md` (8 bước vibecode-kit + SHIP/MONITOR/adversarial-verify/DevEx/docs).
 - **Security gate:** `.claude/workflow/security.md` (STRIDE + OWASP — CUSTOMIZE theo stack).
 - **Subagents:** `.claude/workflow/subagents.md` + `.claude/workflows/*.mjs`.
@@ -14,10 +15,12 @@ Stack: **{{STACK}}**.
 1. Đọc `progress.md` + `session-handoff.md` → biết đang ở đâu.
 2. Đọc `feature_list.json` → lấy `active_feature`, đọc `done_when` + `verify`.
 3. Đọc mục tương ứng trong Blueprint trước khi code.
-4. **One feature at a time** (làm 1 feature một lúc). Xong → chạy verify → cập nhật state → SHIP gate.
+4. **Sắp sửa một feature đã `done`?** Đọc dossier của nó (`doc` trong `feature_list.json`) TRƯỚC khi đụng code — mục 4 (bên trong) và mục 6 (cạm bẫy) tiết kiệm cả phiên dò lại.
+5. **One feature at a time** (làm 1 feature một lúc). Xong → chạy verify → cập nhật state → viết dossier → SHIP gate.
 
 ## Verification Commands
 - `./init.sh <target>` — lint/typecheck/build/test + secret-leak grep. **CUSTOMIZE target/lệnh trong `init.sh` theo stack.**
+- `./init.sh docs` — mọi feature `done`/`verified` phải có dossier hợp lệ (đủ 8 mục, đúng thứ tự, hết placeholder). Nằm trong `./init.sh all`.
 - Feature chỉ `done` khi lệnh verify liên quan **all green**; dán output làm bằng chứng vào `progress.md`.
 
 ## Subagents (multi-agent — opt-in)
@@ -46,6 +49,7 @@ Starter chung (giữ cái áp dụng, thêm cái riêng của {{PROJECT_NAME}}):
 ## Definition of Done (mỗi feature)
 - `done` = lint + typecheck + build + test **pass** (qua `init.sh` phần liên quan).
 - `secured` = qua checklist `security.md` áp dụng.
+- `documented` = có dossier `docs/features/<ID>-<slug>.md` đủ 8 mục, field `doc` đã trỏ đúng, `./init.sh docs` xanh.
 - `verified` = Homeowner chạy qua flow thật.
 - Không đánh dấu done nếu chưa có **bằng chứng** (log/test output). Ghi vào `progress.md`.
 
@@ -55,7 +59,7 @@ Starter chung (giữ cái áp dụng, thêm cái riêng của {{PROJECT_NAME}}):
 - L3 (đổi scope/kiến trúc/business rule/security): STOP → Homeowner.
 
 ## End of Session (before ending — clean, restartable)
-1. Cập nhật `feature_list.json` status + `progress.md` (Current State + bằng chứng).
+1. Cập nhật `feature_list.json` status + `doc` + `progress.md` (Current State + bằng chứng). Feature nào vừa ship → dossier đã viết xong.
 2. Cập nhật `session-handoff.md`: Blockers, Files touched, Recommended Next Step.
 3. Ghi bài học vào harness memory. **Next steps** phải rõ để phiên sau resume sạch.
 

@@ -203,5 +203,28 @@ console.log(String(j._howto || "").includes("doc") ? "yes" : "no");
 if [ "$hint" = "yes" ]; then ok "_howto giai thich field doc"; else ng "_howto giai thich field doc"; fi
 
 echo ""
+echo "== instruction wiring =="
+
+C="$KIT/template/CLAUDE.md"
+PL="$KIT/template/.claude/workflow/pipeline.md"
+
+has() { # has <mo-ta> <file> <pattern>
+  if grep -qF "$3" "$2" 2>/dev/null; then ok "$1"; else ng "$1 (khong thay: $3)"; fi
+}
+
+has "CLAUDE.md tro toi docs/features/"        "$C"  "docs/features/"
+has "CLAUDE.md nhac _TEMPLATE.md"             "$C"  "_TEMPLATE.md"
+has "CLAUDE.md co lenh ./init.sh docs"        "$C"  "./init.sh docs"
+has "CLAUDE.md DoD co bac documented"         "$C"  "documented"
+has "pipeline.md SHIP nhac dossier"           "$PL" "dossier"
+has "pipeline.md co lenh ./init.sh docs"      "$PL" "./init.sh docs"
+has "pipeline.md co luat cap nhat F cu"       "$PL" "mục 8"
+
+# Anchor tieng Anh phai con nguyen (validate-harness.mjs dua vao day)
+for a in "Startup Workflow" "Verification Commands" "Definition of Done" "End of Session"; do
+  has "CLAUDE.md giu anchor: $a" "$C" "$a"
+done
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi

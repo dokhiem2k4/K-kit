@@ -45,8 +45,11 @@ Chỉ ship khi:
 - [ ] `parallel-review` (subagent) — **0 P0 confirmed** trên diff.
 - [ ] SECURITY gate pass; client bundle 0 secret.
 - [ ] `feature_list.json` + `progress.md` cập nhật (có bằng chứng).
+- [ ] **Feature dossier** `docs/features/<ID>-<slug>.md` viết xong, đủ 8 mục, `feature_list.json` có field `doc`, `./init.sh docs` **xanh**. Bắt đầu từ `docs/features/_TEMPLATE.md`.
 - [ ] **Docs (Diataxis)** theo diff: *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (flow chính), *Explanation* (vì sao).
 - Commit/PR nêu feature id + REQ đã cover; PR body liệt kê `done_when` đã pass.
+
+**Lan tỏa:** nếu feature đang ship **đổi hành vi của một F cũ**, phải thêm một dòng có ngày vào **mục 8 (Cập nhật)** trong dossier của F cũ đó — làm ngay trong SHIP này, không để nợ. Dossier lệch với code còn tệ hơn không có dossier.
 
 ## 10. MONITOR — post-ship
 - Health check sau deploy.
@@ -60,7 +63,7 @@ Chỉ ship khi:
 - **BUILD→VERIFY:** status DONE/DEFERRED có lý do; không BLOCKED chưa resolve.
 - **VERIFY→SECURITY:** adversarial refute pass; traceability đủ.
 - **SECURITY→SHIP:** 0 P0 security; 0 secret trong bundle.
-- **SHIP→next:** state cập nhật + bằng chứng + docs sync.
+- **SHIP→next:** state cập nhật + bằng chứng + docs sync + **dossier feature đã ghi** (`./init.sh docs` xanh).
 
 ## Memory routine (mỗi cuối phiên)
 Ghi vào harness memory những gì không suy ra được từ code: quyết định kiến trúc phát sinh, cạm bẫy đã gặp, trade-off. Cập nhật `session-handoff.md` trước khi dừng.
