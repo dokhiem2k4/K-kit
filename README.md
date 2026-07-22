@@ -23,7 +23,8 @@ Thứ tự đề xuất (đa số chỉ đổi tên/nội dung, cấu trúc gi�
 4. **`.claude/workflow/security.md`** — điền attack surface thật vào bảng STRIDE + per-feature.
 5. **`init.sh` → CONFIG** — sửa `CLIENT_DIRS` + lệnh build/test theo stack.
 6. **`.claude/workflows/parallel-review.mjs` → LENSES** — chỉnh focus theo rủi ro thật (tùy chọn).
-7. **Audit:** `node <harness-creator>/scripts/validate-harness.mjs --target <PROJECT_DIR>` → kỳ vọng 100/100.
+7. **Dossier** — không phải điền trước. Mỗi lần ship xong một F, copy `docs/features/_TEMPLATE.md` thành `docs/features/<ID>-<slug>.md`, viết đủ 8 mục, trỏ field `doc` trong `feature_list.json`. `./init.sh docs` chặn ship nếu thiếu.
+8. **Audit:** `node <harness-creator>/scripts/validate-harness.mjs --target <PROJECT_DIR>` → kỳ vọng 100/100.
 
 ## Cấu trúc bộ kit
 ```
@@ -36,7 +37,9 @@ harness-kit/
     ├── feature_list.json     # state: feature + deps + done_when
     ├── progress.md           # state: current + evidence
     ├── session-handoff.md    # lifecycle: resume xuyên phiên
-    ├── init.sh               # verification: build/test + secret-leak grep
+    ├── init.sh               # verification: build/test + secret-leak grep + check dossier
+    ├── docs/features/
+    │   └── _TEMPLATE.md      # dossier 8 mục — copy khi ship xong 1 feature
     └── .claude/
         ├── workflow/         # docs: pipeline, security, subagents
         └── workflows/        # runnable: adversarial-verify, parallel-review, parallel-build
@@ -46,8 +49,8 @@ harness-kit/
 | Subsystem | File | Vai trò |
 |---|---|---|
 | Instructions | `CLAUDE.md` | startup path, invariants, definition of done |
-| State | `feature_list.json`, `progress.md` | feature nào, done chưa, bằng chứng |
-| Verification | `init.sh` | lệnh phải chạy trước khi done + secret grep |
+| State | `feature_list.json`, `progress.md`, `docs/features/<ID>-<slug>.md` | feature nào, done chưa, bằng chứng, và **dossier** mô tả từng feature đã ship |
+| Verification | `init.sh` | lệnh phải chạy trước khi done + secret grep + `docs` |
 | Scope | `feature_list.json` deps + done_when | chống overreach / nửa vời |
 | Lifecycle | `session-handoff.md` + End-of-Session | phiên sau restart sạch |
 
@@ -59,6 +62,7 @@ harness-kit/
 Chi tiết: `.claude/workflow/subagents.md`. Tốn token → chỉ fan-out khi đáng.
 
 ## Ghi chú
-- Yêu cầu `node` (bootstrap) + `bash` (chạy `init.sh`; Windows dùng Git Bash).
+- Yêu cầu `node` (bootstrap + `./init.sh docs`) + `bash` (chạy `init.sh`; Windows dùng Git Bash). Không có `node` thì `check_docs` in SKIP chứ không giả vờ pass.
+- Test bộ kit: `bash tests/run-tests.sh` (bootstrap project tạm rồi assert exit code của `init.sh`).
 - Template có anchor tiếng Anh (Startup Workflow / Definition of Done / ...) để qua validator; nội dung tiếng Việt.
 - Đây là *harness*, không phải app scaffold — nó điều phối cách agent làm, không sinh code sản phẩm.

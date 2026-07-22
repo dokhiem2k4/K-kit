@@ -7,7 +7,6 @@ KIT="$PWD"
 
 PASSED=0
 FAILED=0
-N=0
 
 cleanup() { rm -rf "$KIT/.tmp-tests"; }
 trap cleanup EXIT
@@ -21,11 +20,12 @@ win() {
 }
 
 # Bootstrap mot project tam, in ra duong dan POSIX cua no.
+# Dung mktemp chu khong dung bien dem: ham nay luon chay trong $(...) nen subshell,
+# bien dem tang trong subshell se khong giu duoc -> moi project se trung duong dan.
 new_project() {
-  N=$((N + 1))
-  local d="$KIT/.tmp-tests/p$N"
-  rm -rf "$d"
-  mkdir -p "$d"
+  mkdir -p "$KIT/.tmp-tests"
+  local d
+  d="$(mktemp -d "$KIT/.tmp-tests/pXXXXXX")"
   node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$d")" \
     --name "Test Project" --stack "node" >/dev/null 2>&1
   echo "$d"
@@ -224,6 +224,35 @@ has "pipeline.md co luat cap nhat F cu"       "$PL" "mục 8"
 for a in "Startup Workflow" "Verification Commands" "Definition of Done" "End of Session"; do
   has "CLAUDE.md giu anchor: $a" "$C" "$a"
 done
+
+echo ""
+echo "== README + e2e =="
+
+R="$KIT/README.md"
+if grep -qF "_TEMPLATE.md" "$R"; then ok "README liet ke _TEMPLATE.md trong cay thu muc"; else ng "README liet ke _TEMPLATE.md"; fi
+if grep -qF "dossier" "$R"; then ok "README giai thich dossier"; else ng "README giai thich dossier"; fi
+
+# Luu y: gom output vao bien roi moi grep. Neu pipe thang vao `grep -q`, grep thoat som
+# -> lenh dau pipe an SIGPIPE -> `set -o pipefail` bao non-zero, test fail oan.
+
+# bootstrap --dry-run phai liet ke file template moi
+P="$KIT/.tmp-tests/dry"
+rm -rf "$P"; mkdir -p "$P"
+out="$(node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "Dry" --dry-run 2>&1)"
+if printf '%s' "$out" | grep -qE 'docs[\\/]features[\\/]_TEMPLATE\.md'; then
+  ok "bootstrap --dry-run liet ke docs/features/_TEMPLATE.md"
+else
+  ng "bootstrap --dry-run liet ke docs/features/_TEMPLATE.md"
+fi
+
+# ./init.sh all phai chay khoi FEATURE DOCS
+P="$(new_project)"
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "FEATURE DOCS"; then
+  ok "./init.sh all co chay check_docs"
+else
+  ng "./init.sh all co chay check_docs"
+fi
 
 echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
