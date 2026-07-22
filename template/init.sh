@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verification runner — {{PROJECT_NAME}}
-# Dung: ./init.sh [scaffold|build|secret|all]   (mac dinh: all)
+# Dung: ./init.sh [scaffold|build|secret|docs|all]   (mac dinh: all)
 # CUSTOMIZE: sua bien CONFIG + ham check_build/check_secret theo stack cua ban.
 # Fail-fast: build/typecheck hard-error dung ngay trong tung target (set -e semantics);
 # runner tong hop FAIL de bao cao het cac check con lai.
@@ -49,11 +49,48 @@ check_secret() {
   [ "$found" -eq 1 ] && FAIL=1 || echo "   OK: 0 secret trong client bundle"
 }
 
+# Moi feature done/verified phai co dossier docs/features/<ID>-<slug>.md du 8 muc.
+check_docs() {
+  step "FEATURE DOCS (dossier cho feature done/verified)"
+  command -v node >/dev/null 2>&1 || { echo "   (khong co node — SKIP, khong xac nhan duoc)"; return; }
+  [ -f feature_list.json ] || { echo "   (khong co feature_list.json — skip)"; return; }
+  node -e '
+const fs = require("fs");
+const j = JSON.parse(fs.readFileSync("feature_list.json", "utf8"));
+const DONE = ["done", "verified"];
+const WANT = "1,2,3,4,5,6,7,8";
+let bad = 0, n = 0;
+const fail = (id, msg) => { console.log("   [FAIL] " + id + ": " + msg); bad = 1; };
+for (const f of (j.features || [])) {
+  if (!DONE.includes(f.status)) continue;
+  n++;
+  const id = f.id || "(feature khong co id)";
+  const p = typeof f.doc === "string" ? f.doc.trim() : "";
+  if (!p) { fail(id, "thieu field \"doc\" trong feature_list.json"); continue; }
+  if (!fs.existsSync(p)) { fail(id, "khong tim thay dossier " + p); continue; }
+  const t = fs.readFileSync(p, "utf8");
+  const nums = t.split(/\r?\n/)
+    .filter(l => /^##\s+[1-8]\./.test(l))
+    .map(l => l.match(/^##\s+([1-8])\./)[1]);
+  if (nums.join(",") !== WANT) {
+    fail(id, p + " phai co du 8 muc ## 1. .. ## 8. dung thu tu (dang co: " + (nums.join(",") || "khong co muc nao") + ")");
+    continue;
+  }
+  if (t.indexOf("<TODO:") >= 0) { fail(id, p + " con placeholder <TODO:"); continue; }
+  if (t.indexOf("<!--") >= 0) { fail(id, p + " con chu thich huong dan HTML chua xoa"); continue; }
+}
+if (n === 0) console.log("   (chua feature nao done/verified — skip)");
+else if (!bad) console.log("   OK: " + n + " feature done/verified deu co dossier hop le");
+process.exit(bad);
+' || FAIL=1
+}
+
 case "$TARGET" in
   scaffold) check_scaffold ;;
   build)    check_build ;;
   secret)   check_secret ;;
-  all)      check_scaffold; check_build; check_secret ;;
+  docs)     check_docs ;;
+  all)      check_scaffold; check_build; check_secret; check_docs ;;
   *) echo "unknown target: $TARGET"; exit 2 ;;
 esac
 
