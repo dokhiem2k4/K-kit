@@ -255,5 +255,214 @@ else
 fi
 
 echo ""
+echo "== check_build: script fail phai chan gate =="
+
+# Truoc day `npm run lint 2>/dev/null || echo "(no lint script)"` gop hai truong hop khac han
+# nhau lam mot: script THIEU va script CHAY-ROI-FAIL. Ket qua la lint do van di qua gate.
+# Nhom test nay khoa lai hanh vi do.
+
+# mkpkg <proj> <json-scripts>  — viet package.json voi scripts cho truoc
+mkpkg() {
+  node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1] + "/package.json",
+  JSON.stringify({ name: "t", private: true, scripts: JSON.parse(process.argv[2]) }, null, 2));
+' "$(win "$1")" "$2"
+}
+
+# Baseline: build xanh, khong co lint/test -> phai PASS nhung bao SKIP.
+P="$(new_project)"
+mkpkg "$P" '{"build":"node -e \"0\""}'
+out="$(bash "$P/init.sh" build 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ]; then ok "build xanh -> exit 0"; else ng "build xanh -> exit 0 (rc=$rc)"; fi
+if printf '%s' "$out" | grep -qF 'SKIP: khong co script "lint"'; then
+  ok "thieu lint -> bao SKIP (khong gia vo pass)"
+else
+  ng "thieu lint -> bao SKIP"
+fi
+if printf '%s' "$out" | grep -qF 'check bi SKIP'; then
+  ok "summary noi ro con check bi SKIP"
+else
+  ng "summary noi ro con check bi SKIP"
+fi
+
+# Hard case: lint FAIL. Truoc kia bi nuot thanh "(no lint script)" va gate van xanh.
+P="$(new_project)"
+mkpkg "$P" '{"lint":"node -e \"process.exit(1)\"","build":"node -e \"0\""}'
+out="$(bash "$P/init.sh" build 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ]; then ok "lint FAIL -> gate do (exit != 0)"; else ng "lint FAIL -> gate do (exit=$rc — lint do van qua duoc gate!)"; fi
+if printf '%s' "$out" | grep -qF '[FAIL] lint'; then ok "lint FAIL -> in ro [FAIL] lint"; else ng "lint FAIL -> in ro [FAIL] lint"; fi
+
+# typecheck FAIL cung phai chan.
+P="$(new_project)"
+mkpkg "$P" '{"typecheck":"node -e \"process.exit(1)\"","build":"node -e \"0\""}'
+if bash "$P/init.sh" build >/dev/null 2>&1; then ng "typecheck FAIL -> gate do"; else ok "typecheck FAIL -> gate do"; fi
+
+# test FAIL cung phai chan (DoD noi 'lint + typecheck + build + test pass').
+P="$(new_project)"
+mkpkg "$P" '{"build":"node -e \"0\"","test":"node -e \"process.exit(1)\""}'
+if bash "$P/init.sh" build >/dev/null 2>&1; then ng "test FAIL -> gate do"; else ok "test FAIL -> gate do"; fi
+
+# build la bat buoc: thieu script build -> FAIL, khong phai SKIP.
+P="$(new_project)"
+mkpkg "$P" '{"lint":"node -e \"0\""}'
+out="$(bash "$P/init.sh" build 2>&1)"
+if printf '%s' "$out" | grep -qF 'thieu script "build"'; then ok "thieu build -> FAIL (khong phai SKIP)"; else ng "thieu build -> FAIL"; fi
+
+# Khong co package.json: SKIP that tha, va KHONG duoc bao "moi check deu chay".
+P="$(new_project)"
+out="$(bash "$P/init.sh" build 2>&1)"
+if printf '%s' "$out" | grep -qF 'KHONG phai pass'; then ok "khong co package.json -> noi ro day khong phai pass"; else ng "khong co package.json -> noi ro day khong phai pass"; fi
+if printf '%s' "$out" | grep -qF 'moi check deu chay'; then ng "khong duoc bao 'moi check deu chay' khi da SKIP"; else ok "khong bao 'moi check deu chay' khi da SKIP"; fi
+
+echo ""
+echo "== plugin: skills =="
+
+# Moi skill phai co frontmatter hop le. `name` phai khop ten thu muc (Claude Code resolve
+# skill theo do); `description` la thu quyet dinh skill co auto-trigger hay khong — thieu no
+# thi skill nam tren dia va khong bao gio duoc goi.
+SKILL_COUNT=0
+for d in "$KIT"/skills/*/; do
+  s="$d/SKILL.md"
+  base="$(basename "$d")"
+  SKILL_COUNT=$((SKILL_COUNT + 1))
+  if [ ! -f "$s" ]; then ng "skills/$base co SKILL.md"; continue; fi
+
+  # frontmatter phai mo o dong 1 va dong o mot dong `---` sau do
+  if [ "$(head -1 "$s")" = "---" ] && [ "$(sed -n '2,12p' "$s" | grep -c '^---$')" -ge 1 ]; then
+    ok "skills/$base: frontmatter dong/mo dung"
+  else
+    ng "skills/$base: frontmatter dong/mo dung"
+  fi
+
+  fm_name="$(sed -n '2,12p' "$s" | sed -n 's/^name: *//p' | head -1)"
+  if [ "$fm_name" = "$base" ]; then ok "skills/$base: name khop ten thu muc"
+  else ng "skills/$base: name khop ten thu muc (thay: '$fm_name')"; fi
+
+  fm_desc="$(sed -n '2,12p' "$s" | sed -n 's/^description: *//p' | head -1)"
+  if [ "${#fm_desc}" -ge 40 ]; then ok "skills/$base: description du dai de trigger (${#fm_desc} ky tu)"
+  else ng "skills/$base: description du dai de trigger (${#fm_desc} ky tu, can >=40)"; fi
+
+  # Anti-rationalization: day la thu phan biet skill voi mot to checklist.
+  if grep -qiE '^\| Ban nghi \| Thuc te \|' "$s"; then ok "skills/$base: co bang red flags"
+  else ng "skills/$base: co bang red flags"; fi
+
+  # Guard chong false-positive. Acceptance test da bat duoc ca: hook im dung nhung agent
+  # van keo skill vao mot repo khong co harness, vi description qua rong.
+  # Hang rao 1: dieu kien tien quyet phai nam trong description (agent doc no truoc than skill).
+  case "$fm_desc" in
+    *"feature_list.json"*) ok "skills/$base: description co dieu kien tien quyet" ;;
+    *) ng "skills/$base: description co dieu kien tien quyet" ;;
+  esac
+  # Hang rao 2: than skill phai tu thoat khi khong co harness.
+  if grep -qF '<PRECONDITION>' "$s"; then ok "skills/$base: than skill co bail-out"
+  else ng "skills/$base: than skill co bail-out"; fi
+done
+
+if [ "$SKILL_COUNT" -ge 6 ]; then ok "co >=6 gate skill (thay $SKILL_COUNT)"; else ng "co >=6 gate skill (thay $SKILL_COUNT)"; fi
+
+# using-harness phai route toi moi skill con lai — no la thu duy nhat duoc hook bom vao,
+# nen skill nao khong duoc nhac o day thi thuc te khong ai tim ra.
+U="$KIT/skills/using-harness/SKILL.md"
+missing_route=""
+for d in "$KIT"/skills/*/; do
+  base="$(basename "$d")"
+  [ "$base" = "using-harness" ] && continue
+  grep -qF "$base" "$U" || missing_route="$missing_route $base"
+done
+if [ -z "$missing_route" ]; then ok "using-harness route toi moi skill con lai"
+else ng "using-harness thieu route toi:$missing_route"; fi
+
+echo ""
+echo "== plugin: manifest + hook =="
+
+if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(win "$KIT/.claude-plugin/plugin.json")" 2>/dev/null; then
+  ok "plugin.json parse duoc"
+else
+  ng "plugin.json parse duoc"
+fi
+if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(win "$KIT/hooks/hooks.json")" 2>/dev/null; then
+  ok "hooks.json parse duoc"
+else
+  ng "hooks.json parse duoc"
+fi
+if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start co quyen exec"; else ng "hooks/session-start co quyen exec"; fi
+
+# Hook phai IM LANG ngoai project co harness — day la khac biet so voi bom vo dieu kien.
+NOHARNESS="$KIT/.tmp-tests/noharness"
+rm -rf "$NOHARNESS"; mkdir -p "$NOHARNESS"
+out="$(CLAUDE_PROJECT_DIR="$NOHARNESS" bash "$KIT/hooks/session-start" 2>&1)"
+if [ -z "$out" ]; then ok "hook im lang trong repo khong co harness"; else ng "hook im lang trong repo khong co harness (in ra: $out)"; fi
+
+# Trong project co harness: phai ra JSON hop le, chua skill va state that.
+P="$(new_project)"
+out="$(CLAUDE_PROJECT_DIR="$P" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
+if printf '%s' "$out" | node -e '
+let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const j = JSON.parse(s);
+  const ctx = j.hookSpecificOutput?.additionalContext ?? j.additionalContext;
+  if (typeof ctx !== "string" || !ctx.length) throw new Error("khong co additionalContext");
+  if (!ctx.includes("using-harness")) throw new Error("khong bom skill using-harness");
+  if (!ctx.includes("ACTIVE: F01")) throw new Error("khong bom state that (active feature)");
+  if (!ctx.includes("done_when")) throw new Error("khong bom done_when");
+});' 2>/dev/null; then
+  ok "hook bom JSON hop le + skill + state that (ACTIVE F01, done_when)"
+else
+  ng "hook bom JSON hop le + skill + state that"
+fi
+
+# Hook phai canh bao khi dependency chua xong — day la thu chan overreach ngay dau phien.
+P2="$(new_project)"
+patch_feature "$P2" "F03" '{"status":"pending"}'
+node -e '
+const fs=require("fs");const f=process.argv[1]+"/feature_list.json";
+const j=JSON.parse(fs.readFileSync(f,"utf8"));j.active_feature="F03";
+fs.writeFileSync(f,JSON.stringify(j,null,2));' "$(win "$P2")"
+out="$(CLAUDE_PROJECT_DIR="$P2" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
+if printf '%s' "$out" | grep -qF 'DEPS CHUA XONG'; then
+  ok "hook canh bao dependency chua xong"
+else
+  ng "hook canh bao dependency chua xong"
+fi
+
+echo ""
+echo "== bootstrap --with-skills =="
+
+P="$KIT/.tmp-tests/skills-dry"
+rm -rf "$P"; mkdir -p "$P"
+out="$(node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "S" --with-skills --dry-run 2>&1)"
+if printf '%s' "$out" | grep -qE '\.claude[\\/]skills[\\/]using-harness[\\/]SKILL\.md'; then
+  ok "--with-skills liet ke .claude/skills/using-harness/SKILL.md"
+else
+  ng "--with-skills liet ke .claude/skills/using-harness/SKILL.md"
+fi
+
+# Khong co --with-skills thi KHONG duoc do skill vao project (mac dinh la plugin route).
+P="$KIT/.tmp-tests/noskills-dry"
+rm -rf "$P"; mkdir -p "$P"
+out="$(node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "S" --dry-run 2>&1)"
+if printf '%s' "$out" | grep -qF '.claude/skills'; then
+  ng "mac dinh khong copy skills vao project"
+else
+  ok "mac dinh khong copy skills vao project"
+fi
+
+# Copy that (khong dry-run) phai ra file doc duoc.
+P="$KIT/.tmp-tests/skills-real"
+rm -rf "$P"; mkdir -p "$P"
+node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "S" --with-skills >/dev/null 2>&1
+if [ -f "$P/.claude/skills/verifying-a-feature/SKILL.md" ]; then
+  ok "--with-skills copy that ra .claude/skills/"
+else
+  ng "--with-skills copy that ra .claude/skills/"
+fi
+
+echo ""
+echo "== CLAUDE.md wiring toi skills =="
+for s in harness-startup building-a-feature verifying-a-feature security-gate writing-feature-dossier shipping-a-feature; do
+  has "CLAUDE.md route toi skill: $s" "$C" "$s"
+done
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi

@@ -1,2 +1,3 @@
 .tmp-tests/
 node_modules/
+.tmp-acceptance/
