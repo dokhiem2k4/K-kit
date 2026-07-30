@@ -3,9 +3,14 @@
 // Usage:
 //   node bootstrap.mjs --target /path/to/project --name "My Project" \
 //        [--tagline "one-liner"] [--stack "Next.js + Postgres"] \
-//        [--blueprint docs/specs/blueprint.md] [--memory-dir .claude/memory/] [--force]
+//        [--blueprint docs/specs/blueprint.md] [--memory-dir .claude/memory/] \
+//        [--with-skills] [--force]
 //
 // Non-clobbering by default: existing files are skipped (reported) unless --force.
+//
+// --with-skills also copies skills/ into <target>/.claude/skills/ so the gate skills
+// auto-trigger even when harness-kit is NOT installed as a plugin. Weaker than the
+// plugin route (no SessionStart hook, so no live-state injection), but zero-install.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_DIR = path.join(__dirname, 'template');
+const SKILLS_DIR = path.join(__dirname, 'skills');
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -33,7 +39,9 @@ const args = parseArgs(process.argv.slice(2));
 if (args.help || !args.target || !args.name) {
   console.log(`harness-kit bootstrap
 Required: --target <dir>  --name "<Project Name>"
-Optional: --tagline "..."  --stack "..."  --blueprint <path>  --memory-dir <path>  --force  --dry-run`);
+Optional: --tagline "..."  --stack "..."  --blueprint <path>  --memory-dir <path>
+          --with-skills   copy gate skills into <target>/.claude/skills/ (no plugin install needed)
+          --force  --dry-run`);
   process.exit(args.help ? 0 : 1);
 }
 
@@ -70,11 +78,21 @@ function walk(dir) {
 }
 
 const dryRun = !!args['dry-run'];
-const files = walk(TEMPLATE_DIR);
+const withSkills = !!args['with-skills'];
+
+// [srcRoot, destPrefix] pairs. Skills land under .claude/skills/ so Claude Code
+// discovers them as project skills; their descriptions are what make them trigger.
+const sources = [[TEMPLATE_DIR, '']];
+if (withSkills) {
+  if (fs.existsSync(SKILLS_DIR)) sources.push([SKILLS_DIR, path.join('.claude', 'skills')]);
+  else console.log('  WARN: --with-skills nhung khong tim thay skills/ trong kit');
+}
+
+const files = sources.flatMap(([root, prefix]) =>
+  walk(root).map((src) => ({ src, rel: path.join(prefix, path.relative(root, src)) })));
 let written = 0, skipped = 0;
 
-for (const src of files) {
-  const rel = path.relative(TEMPLATE_DIR, src);
+for (const { src, rel } of files) {
   const dest = path.join(target, rel);
   if (fs.existsSync(dest) && !args.force) { console.log(`  SKIP (exists)  ${rel}`); skipped++; continue; }
   const ext = path.extname(src).toLowerCase();
@@ -90,6 +108,7 @@ for (const src of files) {
 console.log(`\nharness-kit → ${target}`);
 console.log(`  project : ${tokens['{{PROJECT_NAME}}']}`);
 console.log(`  written : ${written}   skipped(existing): ${skipped}${dryRun ? '  [dry-run]' : ''}`);
+console.log(`  skills  : ${withSkills ? '.claude/skills/ (project-local, auto-discovered)' : 'khong copy — cai harness-kit lam plugin, hoac chay lai voi --with-skills'}`);
 console.log(`\nNext:
   1) Điền Blueprint tại ${tokens['{{BLUEPRINT_PATH}}']} (hoặc trỏ --blueprint sang file có sẵn).
   2) Sửa feature_list.json (thay F01..F0x bằng feature thật) + Invariants trong CLAUDE.md + security.md + init.sh CONFIG theo stack.

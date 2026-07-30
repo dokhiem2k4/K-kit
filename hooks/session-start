@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# SessionStart hook for harness-kit.
+#
+# Unlike an unconditional bootstrap, this fires ONLY inside a project that has
+# actually been bootstrapped with the harness. In any other repo it exits silently
+# so it never pollutes unrelated sessions.
+#
+# It injects two things:
+#   1. the using-harness skill (the meta-rule: which gate skill to invoke when)
+#   2. the LIVE state of this project (active feature + status + blockers)
+# so the agent starts grounded in real state instead of starting blind.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+# --- Gate: is this a harness project? ----------------------------------------
+# feature_list.json is the state file; pipeline.md is the workflow. Need both —
+# a stray feature_list.json in a non-harness repo must not trigger us.
+[ -f "${PROJECT_DIR}/feature_list.json" ] || exit 0
+[ -f "${PROJECT_DIR}/.claude/workflow/pipeline.md" ] || exit 0
+
+skill_file="${PLUGIN_ROOT}/skills/using-harness/SKILL.md"
+[ -f "$skill_file" ] || exit 0
+using_harness_content="$(cat "$skill_file")"
+
+# --- Live state: active feature, its status, and what verifies it ------------
+# Best-effort. No node -> we say so rather than inject a stale or invented state.
+live_state="(khong co node — khong doc duoc feature_list.json; doc thu cong truoc khi lam gi)"
+if command -v node >/dev/null 2>&1; then
+  live_state="$(node -e '
+const fs = require("fs");
+try {
+  const j = JSON.parse(fs.readFileSync(process.argv[1] + "/feature_list.json", "utf8"));
+  const fs_ = j.features || [];
+  const active = fs_.find(f => f.id === j.active_feature) || null;
+  const count = (s) => fs_.filter(f => f.status === s).length;
+  const out = [];
+  out.push("Project: " + (j.project || "?") + "  |  Blueprint: " + (j.blueprint || "?"));
+  out.push("Feature board: " + fs_.length + " total — " +
+    ["done","verified","in_progress","blocked","pending","deferred"]
+      .map(s => count(s) + " " + s).filter(x => !x.startsWith("0 ")).join(", "));
+  if (active) {
+    out.push("ACTIVE: " + active.id + " (" + active.status + ") — " + (active.name || ""));
+    const dw = active.done_when || [];
+    if (dw.length) out.push("  done_when: " + dw.map(c => "\n    - " + c).join(""));
+    const v = active.verify || [];
+    if (v.length) out.push("  verify: " + v.join(" ; "));
+    const deps = (active.dependencies || []).filter(id => {
+      const d = fs_.find(f => f.id === id);
+      return !d || !["done","verified"].includes(d.status);
+    });
+    if (deps.length) out.push("  !! DEPS CHUA XONG: " + deps.join(", ") + " — khong duoc bat dau " + active.id);
+  } else {
+    out.push("ACTIVE: (active_feature khong tro toi feature nao — sua feature_list.json truoc)");
+  }
+  const undocumented = fs_.filter(f => ["done","verified"].includes(f.status) && !f.doc);
+  if (undocumented.length) out.push("!! Feature done nhung thieu field doc: " + undocumented.map(f => f.id).join(", "));
+  console.log(out.join("\n"));
+} catch (e) {
+  console.log("(feature_list.json khong doc duoc: " + e.message + ")");
+}
+' "$PROJECT_DIR" 2>&1)"
+fi
+
+# --- Build the injected block ------------------------------------------------
+context="<EXTREMELY_IMPORTANT>
+Ban dang o trong mot project co HARNESS (harness-kit). Harness dieu phoi cach ban lam viec:
+state o feature_list.json, gate co hoc o ./init.sh, pipeline o .claude/workflow/pipeline.md.
+
+**Trang thai THAT cua project nay, doc luc bat dau phien:**
+
+${live_state}
+
+**Duoi day la toan bo skill 'harness-kit:using-harness' — luat chon gate skill.
+Moi skill khac: dung tool 'Skill'.**
+
+${using_harness_content}
+</EXTREMELY_IMPORTANT>"
+
+# --- JSON-escape (single-pass parameter substitution, same approach as superpowers) ---
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+escaped="$(escape_for_json "$context")"
+
+# Claude Code reads hookSpecificOutput.additionalContext; other harnesses read the
+# top-level SDK-standard additionalContext. Emit only one so nothing is duplicated.
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$escaped"
+else
+  printf '{\n  "additionalContext": "%s"\n}\n' "$escaped"
+fi
+
+exit 0

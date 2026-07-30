@@ -11,6 +11,22 @@ Stack: **{{STACK}}**.
 - **Security gate:** `.claude/workflow/security.md` (STRIDE + OWASP — CUSTOMIZE theo stack).
 - **Subagents:** `.claude/workflow/subagents.md` + `.claude/workflows/*.mjs`.
 
+## Gate skills (auto-trigger — dùng qua tool `Skill`)
+Harness này đi kèm skill cho từng gate của pipeline. **Invoke skill trước khi hành động**, đừng dựa trí nhớ:
+
+| Thời điểm | Skill |
+|---|---|
+| Bắt đầu phiên / resume / không rõ đang ở đâu | `harness-startup` |
+| Sắp viết code cho một feature | `building-a-feature` |
+| Nghĩ là feature xong, sắp đánh `done` | `verifying-a-feature` |
+| Trước SHIP, hoặc chạm auth/data/secret/input | `security-gate` |
+| Viết hồ sơ feature vừa ship | `writing-feature-dossier` |
+| SHIP gate + End of Session | `shipping-a-feature` |
+
+Cài harness-kit làm plugin → tên có tiền tố `harness-kit:` và SessionStart hook tự bơm state thật vào đầu phiên.
+Bootstrap bằng `--with-skills` → skill nằm ở `.claude/skills/`, gọi bằng tên trần.
+Không có skill (chưa cài, chưa copy) → phần dưới của file này là bản rút gọn, vẫn phải theo.
+
 ## Startup Workflow (mỗi phiên — before writing code)
 1. Đọc `progress.md` + `session-handoff.md` → biết đang ở đâu.
 2. Đọc `feature_list.json` → lấy `active_feature`, đọc `done_when` + `verify`.
@@ -20,6 +36,7 @@ Stack: **{{STACK}}**.
 
 ## Verification Commands
 - `./init.sh <target>` — lint/typecheck/build/test + secret-leak grep. **CUSTOMIZE target/lệnh trong `init.sh` theo stack.**
+- **SKIP không phải pass.** `init.sh` đếm số check không chạy được và in ra ở dòng cuối. Một lần chạy toàn SKIP vẫn exit 0 — dán nó vào `progress.md` như bằng chứng "all green" là gian lận. Trước khi đánh `done`: làm cho check đó chạy được, hoặc chạy tay và dán output.
 - `./init.sh docs` — mọi feature `done`/`verified` phải có dossier hợp lệ (đủ 8 mục, đúng thứ tự, hết placeholder). Nằm trong `./init.sh all`.
 - Feature chỉ `done` khi lệnh verify liên quan **all green**; dán output làm bằng chứng vào `progress.md`.
 
