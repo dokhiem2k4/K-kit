@@ -8,7 +8,10 @@ set -uo pipefail
 cd "$(dirname "$0")"
 TARGET="${1:-all}"
 FAIL=0
+SKIPPED=0
 step() { echo ""; echo "==> $1"; }
+# Check khong chay duoc thi phai dem — mot lan chay toan SKIP khong duoc doc thanh "da kiem het".
+skip() { echo "   (SKIP: $1)"; SKIPPED=$((SKIPPED + 1)); }
 
 # ---- CONFIG (sua theo project) ----------------------------------------------
 # Thu muc code chay tren client (bundle KHONG duoc chua secret): web dist, extension dist, mobile build...
@@ -24,14 +27,56 @@ check_scaffold() {
   [ -f README.md ]    && echo "   README.md: OK"    || echo "   (chua co README.md)"
 }
 
+# package.json co script <name> khong?
+# KHONG duoc dua vao exit code cua `npm run <name>` de doan: no tra non-zero ca khi script
+# thieu LAN khi script chay va fail. Gop hai truong hop do lai la cach mot lan lint do
+# di qua gate ma khong ai biet.
+has_script() {
+  node -e '
+const p = require("./package.json");
+process.exit((p.scripts && p.scripts[process.argv[1]]) ? 0 : 1);
+' "$1" 2>/dev/null
+}
+
+# run_script <name> [required]
+#   script thieu  -> SKIP (co dem), tru khi required=yes thi FAIL
+#   script fail   -> FAIL, va IN NGUYEN output (dung nuot stderr — ban can biet vi sao)
+run_script() {
+  local name="$1" required="${2:-no}"
+  if ! command -v node >/dev/null 2>&1; then skip "khong co node — khong biet package.json co script \"$name\" khong"; return; fi
+  if ! has_script "$name"; then
+    if [ "$required" = "yes" ]; then echo "   [FAIL] thieu script \"$name\" trong package.json"; FAIL=1
+    else skip "khong co script \"$name\" trong package.json"; fi
+    return
+  fi
+  echo "   -> npm run $name"
+  if npm run --silent "$name"; then echo "   OK: $name"; else echo "   [FAIL] $name"; FAIL=1; fi
+}
+
 # CUSTOMIZE: doi sang lenh build/test thuc te cua stack (npm/pnpm/cargo/go/gradle/dotnet...)
 check_build() {
   step "BUILD / TYPECHECK / LINT / TEST"
-  if [ ! -f package.json ]; then echo "   (khong phai node project — sua check_build)"; return; fi
-  npm run --silent lint      2>/dev/null || echo "   (no lint script)"
-  npm run --silent typecheck 2>/dev/null || npx --yes tsc --noEmit 2>/dev/null || echo "   (no typecheck)"
-  npm run --silent build     || { echo "   [FAIL] build"; FAIL=1; }
-  npm run --silent test      2>/dev/null || echo "   (no test script)"
+  if [ ! -f package.json ]; then
+    skip "khong phai node project — CUSTOMIZE check_build cho stack cua ban"
+    echo "   (khong lenh nao chay — day KHONG phai pass)"
+    return
+  fi
+
+  run_script lint
+
+  # typecheck: uu tien script cua project; khong co thi dung tsc LOCAL neu co tsconfig.
+  # Khong dung `npx --yes tsc`: no tai typescript tu mang, cham va co the khac ban project.
+  if has_script typecheck; then
+    run_script typecheck
+  elif [ -f tsconfig.json ] && [ -x node_modules/.bin/tsc ]; then
+    echo "   -> node_modules/.bin/tsc --noEmit"
+    if node_modules/.bin/tsc --noEmit; then echo "   OK: typecheck (tsc)"; else echo "   [FAIL] typecheck (tsc)"; FAIL=1; fi
+  else
+    skip "khong co script \"typecheck\" va khong co tsc local"
+  fi
+
+  run_script build yes   # build la bat buoc: khong build duoc thi khong the done
+  run_script test
 }
 
 # P0 invariant: bundle client KHONG duoc lo secret.
@@ -45,15 +90,15 @@ check_secret() {
       echo "   [FAIL] SECRET trong $d — KHONG duoc ship"; found=1
     fi
   done
-  [ "$scanned" -eq 0 ] && { echo "   (chua co bundle nao — skip)"; return; }
+  [ "$scanned" -eq 0 ] && { skip "chua co client bundle nao de quet (${CLIENT_DIRS[*]})"; return; }
   [ "$found" -eq 1 ] && FAIL=1 || echo "   OK: 0 secret trong client bundle"
 }
 
 # Moi feature done/verified phai co dossier docs/features/<ID>-<slug>.md du 8 muc.
 check_docs() {
   step "FEATURE DOCS (dossier cho feature done/verified)"
-  command -v node >/dev/null 2>&1 || { echo "   (khong co node — SKIP, khong xac nhan duoc)"; return; }
-  [ -f feature_list.json ] || { echo "   (khong co feature_list.json — skip)"; return; }
+  command -v node >/dev/null 2>&1 || { skip "khong co node — khong xac nhan duoc dossier"; return; }
+  [ -f feature_list.json ] || { skip "khong co feature_list.json"; return; }
   node -e '
 const fs = require("fs");
 const j = JSON.parse(fs.readFileSync("feature_list.json", "utf8"));
@@ -95,5 +140,14 @@ case "$TARGET" in
 esac
 
 echo ""
-if [ "$FAIL" -eq 0 ]; then echo "VERIFY OK ($TARGET)"; else echo "VERIFY FAILED ($TARGET)"; fi
+if [ "$FAIL" -ne 0 ]; then
+  echo "VERIFY FAILED ($TARGET)"
+elif [ "$SKIPPED" -gt 0 ]; then
+  # Xanh nhung khong day du. Noi ro, dung de mot lan chay toan SKIP duoc dan vao
+  # progress.md nhu la bang chung "all green".
+  echo "VERIFY OK ($TARGET) — nhung $SKIPPED check bi SKIP, KHONG phai da kiem het."
+  echo "Truoc khi danh done: hoac lam cho check do chay duoc, hoac chay tay va dan output."
+else
+  echo "VERIFY OK ($TARGET) — moi check deu chay."
+fi
 exit $FAIL
