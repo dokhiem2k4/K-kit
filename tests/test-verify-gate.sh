@@ -36,7 +36,13 @@ process.stdout.write(JSON.stringify({
 
 denied() { printf '%s' "$1" | grep -q '"permissionDecision":"deny"'; }
 
+# Moi fixture phai co init.sh in duoc "VERIFY OK": tu khi gate kiem hop dong truoc khi
+# tu choi, mot project khong co init.sh se duoc CHO QUA (dung thiet ke). Fixture thieu
+# init.sh thi moi ca "phai chan" deu do — va do la fixture sai, khong phai gate sai.
+mkinit() { printf '#!/usr/bin/env bash\necho "VERIFY OK (all)"\n' > "$1/init.sh"; }
+
 FL="$WORK/feature_list.json"
+mkinit "$WORK"
 cat > "$FL" <<'JSON'
 {"active_feature":"F01","features":[{"id":"F01","name":"a","status":"pending"},{"id":"F02","name":"b","status":"pending"}]}
 JSON
@@ -103,6 +109,7 @@ if denied "$out"; then ng "ghi status in_progress khong bi chan"; else ok "ghi s
 # Phai dat dung ten feature_list.json trong mot thu muc rieng. Lan dau dat ten fl2.json
 # nen hook bo qua dung theo thiet ke, va ca 8 xanh gia con ca 9 do oan.
 mkdir -p "$WORK/p2"
+mkinit "$WORK/p2"
 FL2="$WORK/p2/feature_list.json"
 cat > "$FL2" <<'JSON'
 {"active_feature":"F02","features":[{"id":"F01","name":"a","status":"done"},{"id":"F02","name":"b","status":"pending"}]}
@@ -134,7 +141,53 @@ out="$(fire pre-edit "{\"file_path\":\"$FL\",\"old_string\":\"pending\",\"new_st
 rm -f "$MARKERS/$SID_OTHER" 2>/dev/null
 if denied "$out"; then ok "marker cua phien khac khong mo khoa cho phien nay"; else ng "marker cua phien khac khong mo khoa cho phien nay"; fi
 
-# --- 11. JSON rac tren stdin -> khong duoc no, khong duoc chan --------------------
+# --- 11. Hop dong VERIFY OK bi vo -> gate phai CHO QUA, khong duoc khoa cung ------
+# Day la lo hong nguy hiem nhat cua thiet ke marker: gate khong co cach nao khac de biet
+# verify da thanh cong. Neu init.sh khong con in "VERIFY OK", marker khong bao gio duoc dat
+# va gate am tham chuyen tu fail-open thanh fail-closed — chan sach moi thao tac ghi done
+# ma khong ai hieu tai sao.
+mkdir -p "$WORK/p3"
+FL3="$WORK/p3/feature_list.json"
+cp "$FL" "$FL3"
+EDIT3="{\"file_path\":\"$FL3\",\"old_string\":\"pending\",\"new_string\":\"\\\"status\\\": \\\"done\\\"\"}"
+
+# 11a. khong co init.sh -> khong duoc chan
+reset_marker
+out="$(fire pre-edit "$EDIT3")"
+if denied "$out"; then ng "khong co init.sh -> gate cho qua (khong khoa cung)"; else ok "khong co init.sh -> gate cho qua (khong khoa cung)"; fi
+
+# 11b. co init.sh nhung KHONG in "VERIFY OK" -> khong duoc chan, va phai canh bao
+reset_marker
+printf '#!/usr/bin/env bash
+echo "everything is fine"
+' > "$WORK/p3/init.sh"
+err="$(printf '%s' "$(node -e '
+const [sid, ti] = process.argv.slice(1);
+process.stdout.write(JSON.stringify({session_id: sid, tool_input: JSON.parse(ti)}));
+' "$SID" "$EDIT3")" | bash "$GATE" pre-edit 2>&1 >/dev/null)"
+out="$(fire pre-edit "$EDIT3")"
+if denied "$out"; then ng "init.sh khong in VERIFY OK -> gate cho qua"; else ok "init.sh khong in VERIFY OK -> gate cho qua"; fi
+if printf '%s' "$err" | grep -q 'hop dong'; then ok "hop dong vo -> canh bao ra stderr"; else ng "hop dong vo -> canh bao ra stderr (thay: ${err:-rong})"; fi
+
+# 11c. init.sh CO in "VERIFY OK" -> gate lam viec binh thuong tro lai
+reset_marker
+printf '#!/usr/bin/env bash
+echo "VERIFY OK (all)"
+' > "$WORK/p3/init.sh"
+out="$(fire pre-edit "$EDIT3")"
+if denied "$out"; then ok "init.sh co VERIFY OK -> gate chan lai nhu thuong"; else ng "init.sh co VERIFY OK -> gate chan lai nhu thuong"; fi
+
+# 11d. chay init.sh ma output khong co VERIFY OK/FAILED -> canh bao hop dong vo
+err="$(node -e '
+process.stdout.write(JSON.stringify({
+  session_id: process.argv[1],
+  tool_input: { command: "./init.sh all" },
+  tool_response: "everything is fine",
+}));
+' "$SID" | bash "$GATE" post-bash 2>&1 >/dev/null)"
+if printf '%s' "$err" | grep -q 'VERIFY OK'; then ok "chay init.sh khong ra VERIFY OK/FAILED -> canh bao ngay"; else ng "chay init.sh khong ra VERIFY OK/FAILED -> canh bao ngay"; fi
+
+# --- 12. JSON rac tren stdin -> khong duoc no, khong duoc chan --------------------
 out="$(printf 'not json' | bash "$GATE" pre-edit 2>/dev/null)"
 if [ -z "$out" ]; then ok "stdin rac -> im lang cho qua (khong khoa phien)"; else ng "stdin rac -> im lang cho qua"; fi
 

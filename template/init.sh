@@ -139,6 +139,14 @@ case "$TARGET" in
   *) echo "unknown target: $TARGET"; exit 2 ;;
 esac
 
+# ==== HOP DONG VOI verify-gate — KHONG DUOC DOI HAI CHUOI DUOI DAY =====================
+# hooks/verify-gate doc output cua file nay de biet mot lan verify da chay va ket qua ra sao:
+#   "VERIFY OK"     -> dat marker, cho phep ghi status done vao feature_list.json
+#   "VERIFY FAILED" -> huy marker
+# Doi/xoa hai chuoi nay se lam gate mat kha nang quan sat. Gate se phat hien va CHO QUA
+# (kem canh bao stderr) chu khong khoa cung phien lam viec — nhung luc do no khong con
+# bao ve gi nua. tests/run-tests.sh co assertion khoa hai chuoi nay lai.
+# =======================================================================================
 echo ""
 if [ "$FAIL" -ne 0 ]; then
   echo "VERIFY FAILED ($TARGET)"

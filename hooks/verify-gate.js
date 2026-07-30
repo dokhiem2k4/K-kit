@@ -20,10 +20,43 @@ const base = path.basename(filePath);
 const STATE_FILES = new Set(["feature_list.json", "progress.md", "session-handoff.md", "CLAUDE.md"]);
 const isStateFile = STATE_FILES.has(base) || /(^|\/)docs\//.test(filePath);
 
+// Chuoi "VERIFY OK" la HOP DONG giua init.sh va gate nay. Gate khong co cach nao khac
+// de biet mot lan verify da thanh cong. Neu init.sh khong con in chuoi do, marker khong
+// bao gio duoc dat, va gate am tham chuyen tu fail-open thanh fail-closed: chan sach moi
+// thao tac ghi done ma khong ai hieu tai sao.
+//
+// Nen truoc khi TU CHOI, gate phai tu kiem: du an nay co init.sh khong, va init.sh do co
+// kha nang in "VERIFY OK" khong. Khong co kha nang do -> gate khong co quyen tu choi.
+const CONTRACT = "VERIFY OK";
+function contractHolds(projectDir) {
+  const p = path.join(projectDir, "init.sh");
+  try {
+    if (!fs.existsSync(p)) return { ok: false, why: "khong tim thay " + p };
+    if (!fs.readFileSync(p, "utf8").includes(CONTRACT)) {
+      return { ok: false, why: p + " khong in chuoi \"" + CONTRACT + "\" — hop dong voi verify-gate da vo" };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, why: "khong doc duoc " + p + ": " + e.message };
+  }
+}
+
 // ---------------------------------------------------------------- post-bash
 if (mode === "post-bash") {
   const r = inp.tool_response;
   const text = typeof r === "string" ? r : JSON.stringify(r || "");
+
+  // Chay init.sh ma output khong co ca VERIFY OK lan VERIFY FAILED = hop dong da vo.
+  // Canh bao ngay tai day, khong doi den luc gate chan nham roi moi phat hien.
+  const cmd = String((inp.tool_input || {}).command || "");
+  if (/init\.sh/.test(cmd) && !/VERIFY (OK|FAILED)/.test(text)) {
+    process.stderr.write(
+      "harness-kit verify-gate: da chay `" + cmd.slice(0, 80) + "` nhung output khong co " +
+      "\"VERIFY OK\" hay \"VERIFY FAILED\".\ninit.sh phai in mot trong hai chuoi do — gate dua vao " +
+      "chung de biet verify da chay va ket qua ra sao. Khong co chung thi gate khong bao ve duoc gi.\n"
+    );
+  }
+
   // VERIFY FAILED phai HUY marker: mot lan chay do sau mot lan chay xanh nghia la
   // trang thai hien tai khong xanh. Neu chi set ma khong huy, agent chay xanh mot lan
   // roi lam vo moi thu van con marker.
@@ -71,6 +104,22 @@ if (typeof toolInput.content === "string") {
 let hasMarker = false;
 try { hasMarker = fs.existsSync(marker); } catch {}
 if (hasMarker) process.exit(0);
+
+// Sap tu choi. Kiem hop dong TRUOC DA: neu du an khong co init.sh, hoac init.sh khong
+// the in "VERIFY OK", thi khong ton tai duong nao de agent thoa man gate nay. Tu choi
+// luc do khong phai la gate — la khoa cung.
+// feature_list.json nam o repo root theo quy uoc, nen dirname cua no chinh la project dir.
+const projectDir = path.dirname(path.resolve(filePath));
+const contract = contractHolds(projectDir);
+if (!contract.ok) {
+  process.stderr.write(
+    "harness-kit verify-gate: CHO QUA thay vi chan, vi khong co duong nao de verify.\n" +
+    "Ly do: " + contract.why + "\n" +
+    "Gate chi chan duoc khi init.sh in \"" + CONTRACT + "\" luc thanh cong. " +
+    "Sua init.sh (hoac chay verify bang tay va dan output) roi gate se hoat dong lai.\n"
+  );
+  process.exit(0);
+}
 
 const reason =
   "CHAN boi harness-kit verify-gate.\n\n" +

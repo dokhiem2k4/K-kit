@@ -506,6 +506,59 @@ process.exit(found ? 0 : 1);
 done
 
 if [ -x "$KIT/hooks/verify-gate" ]; then ok "hooks/verify-gate co quyen exec"; else ng "hooks/verify-gate co quyen exec"; fi
+
+# --- Hop dong init.sh <-> verify-gate ------------------------------------------------
+# Gate khong co cach nao khac de biet mot lan verify da thanh cong ngoai hai chuoi nay.
+# Doi/xoa chung ma khong ai phat hien la lo hong nguy hiem nhat cua thiet ke marker.
+I="$KIT/template/init.sh"
+has "init.sh in chuoi hop dong VERIFY OK"     "$I" "VERIFY OK"
+has "init.sh in chuoi hop dong VERIFY FAILED" "$I" "VERIFY FAILED"
+has "init.sh ghi ro day la hop dong voi gate" "$I" "HOP DONG VOI verify-gate"
+has "verify-gate doc dung chuoi hop dong"     "$KIT/hooks/verify-gate.js" 'const CONTRACT = "VERIFY OK"'
+
+# Kiem HANH VI, khong chi kiem noi dung file: init.sh phai THUC SU in chuoi do khi chay.
+# Mot comment con nguyen trong khi lenh echo bi doi van lam hop dong vo.
+P="$(new_project)"
+node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1] + "/package.json",
+  JSON.stringify({ name: "t", private: true, scripts: { build: "node -e \"0\"" } }, null, 2));
+' "$(win "$P")"
+out="$(bash "$P/init.sh" build 2>&1)"
+if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "init.sh chay that (con SKIP) -> in VERIFY OK"; else ng "init.sh chay that (con SKIP) -> in VERIFY OK"; fi
+
+# init.sh co HAI nhanh in VERIFY OK: "con N check bi SKIP" va "moi check deu chay".
+# Ca tren chi cham nhanh thu nhat. Mutation test cho thay: doi rieng nhanh thu hai thanh
+# "ALL GREEN" va ca 143 assertion van xanh — hop dong vo ma khong ai biet.
+# Nen phai co mot ca chay het moi check (0 SKIP) de phu nhanh con lai.
+P2="$(new_project)"
+node -e '
+const fs = require("fs");
+const d = process.argv[1];
+fs.writeFileSync(d + "/package.json", JSON.stringify({ name: "t", private: true, scripts: {
+  build: "node -e \"0\"", lint: "node -e \"0\"", test: "node -e \"0\"", typecheck: "node -e \"0\"",
+}}, null, 2));
+fs.mkdirSync(d + "/dist", { recursive: true });          // de check_secret co cai de quet
+fs.writeFileSync(d + "/dist/bundle.js", "console.log(1)\n");
+' "$(win "$P2")"
+out="$(bash "$P2/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "init.sh 0 SKIP -> van in VERIFY OK"; else ng "init.sh 0 SKIP -> van in VERIFY OK"; fi
+if printf '%s' "$out" | grep -qF "moi check deu chay"; then ok "init.sh 0 SKIP -> bao moi check deu chay"; else ng "init.sh 0 SKIP -> bao moi check deu chay"; fi
+node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1] + "/package.json",
+  JSON.stringify({ name: "t", private: true, scripts: { build: "node -e \"process.exit(1)\"" } }, null, 2));
+' "$(win "$P")"
+out="$(bash "$P/init.sh" build 2>&1)"
+if printf '%s' "$out" | grep -qF "VERIFY FAILED"; then ok "init.sh that bai -> in VERIFY FAILED"; else ng "init.sh that bai -> in VERIFY FAILED"; fi
+
+# Gate phai TU KIEM hop dong truoc khi tu choi. Khong co buoc nay thi mot init.sh bi sua
+# se lam gate am tham chuyen tu fail-open thanh fail-closed.
+if grep -qF 'contractHolds' "$KIT/hooks/verify-gate.js"; then
+  ok "verify-gate kiem hop dong truoc khi tu choi"
+else
+  ng "verify-gate kiem hop dong truoc khi tu choi — thieu no thi init.sh bi sua se khoa cung phien"
+fi
 for f in hooks/verify-gate tests/test-verify-gate.sh; do
   mode="$(git -C "$KIT" ls-files -s "$f" 2>/dev/null | awk '{print $1}')"
   if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: $f la 100755"
