@@ -483,6 +483,44 @@ for d in "$KIT"/skills/*/; do
 done
 
 echo ""
+echo "== verify-gate: dang ky hook =="
+
+# Gate chi co tac dung neu no duoc DANG KY dung 3 su kien. Thieu post-bash thi marker
+# khong bao gio duoc dat va gate chan sach moi thao tac ghi done — hong theo huong te nhat.
+HJ="$KIT/hooks/hooks.json"
+for pair in "PreToolUse:pre-edit" "PostToolUse:post-bash" "PostToolUse:post-edit"; do
+  ev="${pair%%:*}"; mode="${pair##*:}"
+  if node -e '
+const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+const groups = (j.hooks || {})[process.argv[2]] || [];
+// command that la:  "${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate" pre-edit
+// nen giua ten script va mode co mot dau nhay dong. Khong duoc match chuoi lien "verify-gate <mode>".
+const re = new RegExp("verify-gate\"?\\s+" + process.argv[3] + "\\b");
+const found = groups.some(g => (g.hooks || []).some(h => re.test(h.command || "")));
+process.exit(found ? 0 : 1);
+' "$HJ" "$ev" "$mode" 2>/dev/null; then
+    ok "hooks.json dang ky $ev -> verify-gate $mode"
+  else
+    ng "hooks.json dang ky $ev -> verify-gate $mode"
+  fi
+done
+
+if [ -x "$KIT/hooks/verify-gate" ]; then ok "hooks/verify-gate co quyen exec"; else ng "hooks/verify-gate co quyen exec"; fi
+for f in hooks/verify-gate tests/test-verify-gate.sh; do
+  mode="$(git -C "$KIT" ls-files -s "$f" 2>/dev/null | awk '{print $1}')"
+  if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: $f la 100755"
+  else ng "git index: $f la '$mode' (can 100755)"; fi
+done
+
+# Fail-open la lua chon co chu dich, phai giu nguyen: mot gate hong ma chan sach moi thao
+# tac ghi con te hon khong co gate. Neu ai do doi thanh fail-closed, test nay phai do.
+if grep -qF 'gate KHONG hoat dong trong phien nay' "$KIT/hooks/verify-gate"; then
+  ok "verify-gate fail-open khi thieu node (co canh bao ra stderr)"
+else
+  ng "verify-gate fail-open khi thieu node"
+fi
+
+echo ""
 echo "== tang eval: faithfulness =="
 
 E="$KIT/tests/eval-faithfulness.sh"
