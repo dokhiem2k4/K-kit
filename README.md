@@ -30,7 +30,7 @@ Thứ tự đề xuất (đa số chỉ đổi tên/nội dung, cấu trúc gi�
 Không có bước này thì harness chỉ là file nằm chờ: agent không đọc thì không có gì xảy ra.
 
 **Cách 1 — plugin (đủ tính năng).** Thêm `harness-kit/` làm plugin của Claude Code. Khi đó:
-- 7 skill trong `skills/` auto-trigger theo `description`, gọi bằng `harness-kit:<tên>`.
+- 9 skill trong `skills/` auto-trigger theo `description`, gọi bằng `harness-kit:<tên>`.
 - `hooks/session-start` chạy đầu mỗi phiên. Nó **chỉ kích hoạt trong project thật sự có harness**
   (phải có cả `feature_list.json` lẫn `.claude/workflow/pipeline.md`) — repo khác thì im lặng thoát.
 - Hook bơm vào đầu phiên: skill `using-harness` + **state thật** (active feature, status, `done_when`,
@@ -53,10 +53,12 @@ harness-kit/
 ├── hooks/
 │   ├── hooks.json            # đăng ký SessionStart
 │   └── session-start         # bơm using-harness + state thật (chỉ trong project có harness)
-├── skills/                   # 7 gate skill, mỗi cái có frontmatter description để auto-trigger
+├── skills/                   # 9 gate skill, mỗi cái có frontmatter description để auto-trigger
 │   ├── using-harness/        #   meta: chọn gate skill nào + red flags chung
 │   ├── harness-startup/      #   đầu phiên: đọc state theo thứ tự
+│   ├── planning-features/    #   Blueprint -> feature_list.json, done_when testable
 │   ├── building-a-feature/   #   scope, live testing, escalation L1/L2/L3
+│   ├── debugging-a-feature/  #   test đỏ: scope, test tái hiện, dossier mục 8
 │   ├── verifying-a-feature/  #   bằng chứng, refute pass, vòng fix có breaker
 │   ├── security-gate/        #   STRIDE + OWASP, P0 chặn ship
 │   ├── writing-feature-dossier/
@@ -92,8 +94,9 @@ Chi tiết: `.claude/workflow/subagents.md`. Tốn token → chỉ fan-out khi �
 
 ## Hai tầng test
 ```bash
-bash tests/run-tests.sh    # cấu trúc — 103 assertion, không tốn token
-bash tests/acceptance.sh   # hành vi   — 3 phiên Claude Code thật, tốn token
+bash tests/run-tests.sh                          # cấu trúc — 121 assertion, không tốn token
+bash tests/acceptance.sh                         # hành vi   — 5 phiên Claude Code thật, tốn token
+ACCEPTANCE_MODEL=haiku bash tests/acceptance.sh  # cùng bộ probe trên model yếu hơn
 ```
 
 `run-tests.sh` kiểm **cấu trúc**: file có tồn tại, frontmatter có đúng, `init.sh` có trả đúng exit code.
@@ -104,13 +107,25 @@ Nó không trả lời được câu hỏi quan trọng nhất — *agent có th
 
 | Probe | Prompt | Kỳ vọng |
 |---|---|---|
-| `resume` | "tiếp tục đi" | tự invoke `harness-startup`, hook bơm state |
-| `claim-done` | "F01 xong rồi, đánh done" | tự invoke `verifying-a-feature` (không đánh done thẳng) |
+| `resume` | "tiếp tục đi" | `harness-startup`, hook bơm state |
+| `claim-done` | "F01 xong rồi, đánh done" | `verifying-a-feature` — không đánh done thẳng |
+| `add-feature` | "thêm feature đổi avatar" | `planning-features` — không viết bừa vào JSON |
+| `test-fails` | "npm test đang đỏ, sửa giúp tôi" | `debugging-a-feature` — không nhảy thẳng vào sửa |
 | `no-harness` | "chào, đây là repo gì" | hook im, **không** invoke skill nào |
 
-Probe `no-harness` từng đỏ: hook im đúng nhưng agent vẫn kéo `harness-startup` vào vì description
-quá rộng. Đã vá bằng 2 hàng rào — điều kiện tiên quyết trong `description`, và `<PRECONDITION>`
-bail-out trong thân skill. Không có acceptance test thì lỗi này lọt hoàn toàn.
+Sonnet 5/5, Haiku 5/5.
+
+Bốn lỗi chỉ tầng test này bắt được — không lỗi nào lọt qua được 121 assertion cấu trúc:
+
+1. `description` quá rộng kéo `harness-startup` vào repo không có harness. Vá bằng 2 hàng rào:
+   điều kiện tiên quyết đặt ở **đầu** `description`, và `<PRECONDITION>` bail-out trong thân skill.
+2. Fixture âm nằm **trong chính repo kit** — xung quanh đầy `skills/`, `template/feature_list.json`,
+   nên agent gọi skill là hợp lý. Đo tay: trong repo kit 3/3 false-positive trên haiku, ngoài repo 0/5.
+3. Probe `test-fails` chạy trên project **không có test nào** — "test đang đỏ" là tiền đề giả.
+4. Probe `test-fails` dùng chung project với probe 2 và 3, mà cả hai đều **ghi** vào
+   `feature_list.json` → kết quả phụ thuộc thứ tự chạy.
+
+Ba cái sau là lỗi của **test**, không phải của skill. Fixture dùng chung không phải fixture.
 
 Không có `claude` CLI → `acceptance.sh` in SKIP và exit 0; đó **không** phải pass.
 
