@@ -29,7 +29,14 @@ Thứ tự đề xuất (đa số chỉ đổi tên/nội dung, cấu trúc gi�
 ## Auto-trigger — cài kit làm plugin (khuyến nghị)
 Không có bước này thì harness chỉ là file nằm chờ: agent không đọc thì không có gì xảy ra.
 
-**Cách 1 — plugin (đủ tính năng).** Thêm `harness-kit/` làm plugin của Claude Code. Khi đó:
+**Cách 1 — plugin (đủ tính năng).** Trong Claude Code:
+
+```
+/plugin marketplace add dokhiem2k4/K-kit
+/plugin install harness-kit@k-kit
+```
+
+Khi đó:
 - 9 skill trong `skills/` auto-trigger theo `description`, gọi bằng `harness-kit:<tên>`.
 - `hooks/session-start` chạy đầu mỗi phiên. Nó **chỉ kích hoạt trong project thật sự có harness**
   (phải có cả `feature_list.json` lẫn `.claude/workflow/pipeline.md`) — repo khác thì im lặng thoát.

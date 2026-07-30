@@ -386,6 +386,31 @@ if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(w
 else
   ng "hooks.json parse duoc"
 fi
+
+# marketplace.json la thu cho phep `/plugin marketplace add <repo>`. Khong co no thi kit
+# chi cai duoc bang --plugin-dir thu cong, va toan bo phan auto-trigger phu thuoc vao viec
+# nguoi dung nho lam buoc do moi phien.
+MP="$KIT/.claude-plugin/marketplace.json"
+if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(win "$MP")" 2>/dev/null; then
+  ok "marketplace.json parse duoc"
+else
+  ng "marketplace.json parse duoc"
+fi
+# Ten va version phai KHOP plugin.json. Lech nhau thi cai xong se tro nham cache dir.
+if node -e '
+const fs = require("fs");
+const [mp, pj] = process.argv.slice(1);
+const m = JSON.parse(fs.readFileSync(mp, "utf8"));
+const p = JSON.parse(fs.readFileSync(pj, "utf8"));
+const entry = (m.plugins || []).find(x => x.name === p.name);
+if (!entry) throw new Error("marketplace.json khong co plugin ten " + p.name);
+if (entry.version !== p.version) throw new Error("version lech: " + entry.version + " vs " + p.version);
+if (!entry.source) throw new Error("thieu field source");
+' "$(win "$MP")" "$(win "$KIT/.claude-plugin/plugin.json")" 2>/dev/null; then
+  ok "marketplace.json khop plugin.json (ten + version + source)"
+else
+  ng "marketplace.json khop plugin.json (ten + version + source)"
+fi
 if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start co quyen exec (filesystem)"; else ng "hooks/session-start co quyen exec (filesystem)"; fi
 
 # Bit tren filesystem cua may ban KHONG dam bao bit do vao git. Repo nay tung co
