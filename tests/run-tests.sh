@@ -386,7 +386,22 @@ if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(w
 else
   ng "hooks.json parse duoc"
 fi
-if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start co quyen exec"; else ng "hooks/session-start co quyen exec"; fi
+if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start co quyen exec (filesystem)"; else ng "hooks/session-start co quyen exec (filesystem)"; fi
+
+# Bit tren filesystem cua may ban KHONG dam bao bit do vao git. Repo nay tung co
+# core.fileMode=false, `chmod +x` khong duoc ghi nhan, va git luu 100644 — nguoi clone
+# ve se co mot hook khong chay duoc, trong khi test o may goc van xanh.
+# Nen phai kiem mode trong INDEX, khong phai tren dia.
+if git -C "$KIT" rev-parse --git-dir >/dev/null 2>&1; then
+  for f in hooks/session-start tests/run-tests.sh tests/acceptance.sh template/init.sh; do
+    mode="$(git -C "$KIT" ls-files -s "$f" 2>/dev/null | awk '{print $1}')"
+    if [ "$mode" = "100755" ]; then ok "git index: $f la 100755"
+    else ng "git index: $f la '$mode' (can 100755 — nguoi clone se khong chay duoc)"; fi
+  done
+else
+  skip_note="khong phai git repo"
+  echo "  (SKIP: khong phai git repo — khong kiem duoc mode trong index)"
+fi
 
 # Hook phai IM LANG ngoai project co harness — day la khac biet so voi bom vo dieu kien.
 NOHARNESS="$KIT/.tmp-tests/noharness"
