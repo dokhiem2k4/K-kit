@@ -34,7 +34,9 @@ Feature chi `done` khi lenh trong `verify` cua no chay **trong luot nay** va tra
 | Thoi diem | Skill |
 |---|---|
 | Bat dau phien / "tiep tuc di" / khong ro dang o dau | `harness-kit:harness-startup` |
+| Bien Blueprint thanh feature, hoac `done_when` mo ho | `harness-kit:planning-features` |
 | Sap viet code cho mot feature | `harness-kit:building-a-feature` |
+| Test do / verify truot / feature da ship bi hoi quy | `harness-kit:debugging-a-feature` |
 | Nghi la feature xong, sap danh `done` | `harness-kit:verifying-a-feature` |
 | Truoc SHIP, hoac dung toi auth / data / secret / input nguoi dung | `harness-kit:security-gate` |
 | Feature da qua VERIFY + SECURITY, sap ship | `harness-kit:shipping-a-feature` |

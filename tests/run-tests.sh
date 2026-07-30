@@ -474,7 +474,11 @@ fi
 
 echo ""
 echo "== CLAUDE.md wiring toi skills =="
-for s in harness-startup building-a-feature verifying-a-feature security-gate writing-feature-dossier shipping-a-feature; do
+# Duyet skills/ thay vi liet ke tay: them skill moi ma quen noi vao CLAUDE.md thi test do,
+# khong im lang bo qua nhu danh sach cung.
+for d in "$KIT"/skills/*/; do
+  s="$(basename "$d")"
+  [ "$s" = "using-harness" ] && continue   # meta skill, hook bom vao, khong can route trong CLAUDE.md
   has "CLAUDE.md route toi skill: $s" "$C" "$s"
 done
 

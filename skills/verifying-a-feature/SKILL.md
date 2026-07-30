@@ -80,7 +80,7 @@ Verify truot thi dem vong. Khong duoc lap vo han.
 | Vong | Lam gi |
 |---|---|
 | 1–2 | Sua truc tiep, chay lai buoc 1 + 2 |
-| 3 | **Dung sua.** Viet ra: gia thiet nao cua ban sai? Neu chua tra loi duoc → invoke skill debug he thong truoc khi sua tiep |
+| 3 | **Dung sua.** Viet ra: gia thiet nao cua ban sai? Chua tra loi duoc → `harness-kit:debugging-a-feature` truoc khi sua tiep |
 | 4 | Spawn subagent moi (context sach) doc lai feature tu dau — context cua ban da nhiem gia thiet sai |
 | 5 | **BREAKER.** Dung. Voi tung finding con lai: no co load-bearing khong? |
 | | · Co finding load-bearing → bao **BLOCKED** cho Homeowner, khong ship |

@@ -17,7 +17,9 @@ Harness này đi kèm skill cho từng gate của pipeline. **Invoke skill trư�
 | Thời điểm | Skill |
 |---|---|
 | Bắt đầu phiên / resume / không rõ đang ở đâu | `harness-startup` |
+| Biến Blueprint thành feature, hoặc `done_when` mơ hồ | `planning-features` |
 | Sắp viết code cho một feature | `building-a-feature` |
+| Test đỏ / verify trượt / feature đã ship bị hồi quy | `debugging-a-feature` |
 | Nghĩ là feature xong, sắp đánh `done` | `verifying-a-feature` |
 | Trước SHIP, hoặc chạm auth/data/secret/input | `security-gate` |
 | Viết hồ sơ feature vừa ship | `writing-feature-dossier` |
