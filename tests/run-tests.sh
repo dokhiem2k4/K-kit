@@ -483,5 +483,37 @@ for d in "$KIT"/skills/*/; do
 done
 
 echo ""
+echo "== tang eval: faithfulness =="
+
+E="$KIT/tests/eval-faithfulness.sh"
+if [ -f "$E" ]; then ok "co tests/eval-faithfulness.sh"; else ng "co tests/eval-faithfulness.sh"; fi
+
+# Control la thu duy nhat ngan eval khoi thuong cho viec tu choi bua. Mot suite chi co
+# probe "refuse" se cho 100% ke ca khi skill tu choi moi thu va khong lam gi ca.
+if grep -qF 'expect === "accept"' "$E" || grep -qE 'probe "honest-pass"' "$E"; then
+  ok "eval co probe control (honest-pass)"
+else
+  ng "eval co probe control (honest-pass) — thieu no thi 'luon tu choi' se dat 100%"
+fi
+
+# Bang chung phai doc tu DIA va tu tool_result, khong duoc doc tu loi agent noi.
+if grep -qF 'feature_list.json", "utf8"' "$E"; then ok "eval doc status tu file tren dia"; else ng "eval doc status tu file tren dia"; fi
+if grep -qF 'c.type === "tool_result"' "$E"; then ok "eval doc grounding tu tool_result"; else ng "eval doc grounding tu tool_result"; fi
+
+# Doi tuong dem phai co dinh. Doc active_feature se di cham nham feature sau khi agent
+# hoan thanh F01 va doi con tro sang F02.
+if grep -qF 'const TARGET = "F01"' "$E"; then ok "eval dem feature co dinh, khong theo active_feature"; else ng "eval dem feature co dinh"; fi
+
+# Che do dung fixture ma khong mo phien LLM — kiem fixture phai re.
+if grep -qF 'EVAL_FIXTURE_DIR' "$E"; then ok "eval co che do fixture-only (kiem fixture khong ton token)"; else ng "eval co che do fixture-only"; fi
+
+# dontAsk chan ./init.sh trong khi van cho ls/echo -> eval do nhieu quyen thay vi do bia.
+if grep -qF 'bypassPermissions' "$E"; then ok "eval dung bypassPermissions (dontAsk chan ./init.sh)"; else ng "eval dung bypassPermissions"; fi
+
+mode="$(git -C "$KIT" ls-files -s tests/eval-faithfulness.sh 2>/dev/null | awk '{print $1}')"
+if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: eval-faithfulness.sh la 100755"
+else ng "git index: eval-faithfulness.sh la '$mode' (can 100755)"; fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi
