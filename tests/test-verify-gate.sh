@@ -244,6 +244,173 @@ fire post-bash '{}' 'VERIFY OK (all)' >/dev/null
 out="$(fire pre-edit "{\"file_path\":\"$FL4\",\"old_string\":\"\\\"tier\\\":\\\"strict\\\"\",\"new_string\":\"\\\"tier\\\":\\\"lite\\\"\"}")"
 if denied "$out"; then ok "still BLOCKED with a marker present"; else ng "still BLOCKED with a marker present"; fi
 
+# --- 14. Fix round 1: the bugs an adversarial review found in the TIER rule --------
+# The review fired 30 adversarial events straight at the hook and confirmed 5 bugs by execution
+# (not by reading the code and guessing). Every assertion below must go RED if its corresponding
+# patch is reverted.
+
+# --- 14a/14b. Bug 1 (CRITICAL): JSON that is well-formed but wrongly shaped — an array with a
+# null element, or "features" being an object instead of an array — used to make .map/for...of
+# throw an UNCAUGHT TypeError, killing the hook (non-zero exit, printing nothing). And because the
+# tier rule runs BEFORE the status rule, the status rule never ran either. After the fix: the hook
+# must not die, AND the status rule below must still block a write that adds status done.
+mkdir -p "$WORK/p6"
+mkinit "$WORK/p6"
+FL6="$WORK/p6/feature_list.json"
+cat > "$FL6" <<'JSON'
+{"active_feature":"F01","features":[{"id":"F01","status":"pending"},{"id":"F02","status":"pending"}]}
+JSON
+
+reset_marker
+crash1="$(node -e '
+console.log(JSON.stringify({active_feature:"F01",features:[null,{id:"F01",status:"done"},{id:"F02",status:"pending"}]}));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL6" "$crash1")")"
+if denied "$out"; then ok "a null element in features -> the hook survives and the status rule still blocks"; else ng "a null element in features -> the hook survives and the status rule still blocks"; fi
+
+reset_marker
+crash2="$(node -e '
+console.log(JSON.stringify({active_feature:"F01",features:{a:{id:"F01",status:"done"}}}));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL6" "$crash2")")"
+if denied "$out"; then ok "features as an object rather than an array -> the hook survives and the status rule still blocks"; else ng "features as an object rather than an array -> the hook survives and the status rule still blocks"; fi
+
+# --- 14c/14d. Bug 2 (IMPORTANT): the PREVIOUS tier is unreadable (the file on disk is broken, or
+# empty) -> no tier judgement at all, even when the new write faithfully preserves a legitimate
+# "lite" feature. "The previous tier is unknown" is not "the tier was lowered".
+mkdir -p "$WORK/p7"
+mkinit "$WORK/p7"
+FL7="$WORK/p7/feature_list.json"
+printf '{"active_feature":"F01","features":[{"id":"F01","tier":"lite","status":"pending"' > "$FL7"
+reset_marker
+repaired="$(node -e '
+console.log(JSON.stringify({active_feature:"F01",features:[{id:"F01",tier:"lite",status:"pending"},{id:"F02",tier:"standard",status:"pending"}]}));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL7" "$repaired")")"
+if denied "$out"; then ng "repairing a broken JSON file on disk while keeping tier lite -> not blocked"; else ok "repairing a broken JSON file on disk while keeping tier lite -> not blocked"; fi
+
+mkdir -p "$WORK/p7e"
+mkinit "$WORK/p7e"
+FL7E="$WORK/p7e/feature_list.json"
+: > "$FL7E"
+reset_marker
+full="$(node -e '
+console.log(JSON.stringify({active_feature:"F01",features:[{id:"F01",tier:"lite",status:"pending"}]}));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL7E" "$full")")"
+if denied "$out"; then ng "empty file on disk, writing a tier lite feature -> not blocked (previous tier unknown)"; else ok "empty file on disk, writing a tier lite feature -> not blocked (previous tier unknown)"; fi
+
+# --- 14e. Bug 3 (IMPORTANT): renaming an id (renumbering features while replanning) without any
+# real tier change must NOT count as lowering a tier. F03 (tier lite) becomes F93, still tier lite.
+mkdir -p "$WORK/p8"
+mkinit "$WORK/p8"
+FL8="$WORK/p8/feature_list.json"
+cat > "$FL8" <<'JSON'
+{"active_feature":"F03","features":[{"id":"F03","name":"c","tier":"lite","status":"pending"},{"id":"F04","name":"d","tier":"standard","status":"pending"}]}
+JSON
+reset_marker
+renamed="$(node -e '
+console.log(JSON.stringify({active_feature:"F93",features:[{id:"F93",name:"c",tier:"lite",status:"pending"},{id:"F04",name:"d",tier:"standard",status:"pending"}]}));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL8" "$renamed")")"
+if denied "$out"; then ng "renaming id F03 -> F93 with tier lite unchanged -> not blocked"; else ok "renaming id F03 -> F93 with tier lite unchanged -> not blocked"; fi
+
+# --- 14f/14g/14h. Bug 4 (IMPORTANT): a tier impersonating a property inherited from
+# Object.prototype (toString/constructor/valueOf) used to make "t in TIER_RANK" wrongly return true,
+# after which TIER_RANK[t] returned A FUNCTION, and "function < number" is always NaN — slipping past
+# every comparison. After the fix (hasOwnProperty) these bogus values must fall back to "standard" —
+# lower than the previous "strict" — so this MUST now be a blocked downgrade.
+mkdir -p "$WORK/p9"
+mkinit "$WORK/p9"
+FL9="$WORK/p9/feature_list.json"
+cat > "$FL9" <<'JSON'
+{"active_feature":"F01","features":[{"id":"F01","name":"a","tier":"strict","status":"pending"}]}
+JSON
+for bogus in toString constructor valueOf; do
+  reset_marker
+  poisoned="$(node -e '
+const t = process.argv[1];
+console.log(JSON.stringify({active_feature:"F01",features:[{id:"F01",name:"a",tier:t,status:"pending"}]}));
+' "$bogus")"
+  out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL9" "$poisoned")")"
+  if denied "$out"; then ok "bogus tier $bogus -> blocked (falls back to standard, lower than strict)"; else ng "bogus tier $bogus -> blocked (falls back to standard, lower than strict)"; fi
+done
+
+# --- 14i/14j. Bug 6 (MINOR): the tier comparison must be case-insensitive.
+mkdir -p "$WORK/p9b"
+mkinit "$WORK/p9b"
+FL9B="$WORK/p9b/feature_list.json"
+cat > "$FL9B" <<'JSON'
+{"active_feature":"F01","features":[{"id":"F01","name":"a","status":"pending"}]}
+JSON
+reset_marker
+upperLite="$(node -e '
+console.log(JSON.stringify({active_feature:"F01",features:[{id:"F01",name:"a",tier:"LITE",status:"pending"}]}));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL9B" "$upperLite")")"
+if denied "$out"; then ok "an uppercase LITE tier -> still blocked (standard default -> lite)"; else ng "an uppercase LITE tier -> still blocked (standard default -> lite)"; fi
+
+reset_marker
+upperStrict="$(node -e '
+console.log(JSON.stringify({active_feature:"F01",features:[{id:"F01",name:"a",tier:"STRICT",status:"pending"}]}));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL9" "$upperStrict")")"
+if denied "$out"; then ng "changing only the case of STRICT (no real tier change) -> not blocked"; else ok "changing only the case of STRICT (no real tier change) -> not blocked"; fi
+
+# --- 14k. Bug 5 (IMPORTANT): an Edit with replace_all:true must replace EVERY occurrence, not just
+# the first one indexOf finds. F01.name and F02.tier are both "strict"; replacing them all with
+# "lite" must expose F02 as a genuine downgrade.
+mkdir -p "$WORK/p5"
+mkinit "$WORK/p5"
+FL5="$WORK/p5/feature_list.json"
+cat > "$FL5" <<'JSON'
+{"active_feature":"F01","features":[{"id":"F01","name":"strict","tier":"standard","status":"pending"},{"id":"F02","name":"b","tier":"strict","status":"pending"}]}
+JSON
+reset_marker
+out="$(fire pre-edit "{\"file_path\":\"$FL5\",\"old_string\":\"strict\",\"new_string\":\"lite\",\"replace_all\":true}")"
+if denied "$out"; then ok "Edit replace_all:true replaces every occurrence -> detects F02 being downgraded"; else ng "Edit replace_all:true replaces every occurrence -> detects F02 being downgraded"; fi
+
+# --- 14l. Check that MultiEdit (the "edits" array) is applied in order by resultingText().
+reset_marker
+multiedit="$(node -e '
+console.log(JSON.stringify({
+  file_path: process.argv[1],
+  edits: [
+    { old_string: "\"tier\":\"strict\"", new_string: "\"tier\":\"standard\"" },
+    { old_string: "\"name\":\"b\"", new_string: "\"name\":\"bb\"" }
+  ]
+}));
+' "$FL4")"
+out="$(fire pre-edit "$multiedit")"
+if denied "$out"; then ok "MultiEdit (the edits array) applied in order -> detects F01 being downgraded"; else ng "MultiEdit (the edits array) applied in order -> detects F01 being downgraded"; fi
+
+# --- 14m/14n. The two fall-through paths of resultingText(): old_string not found on disk, and a
+# post-write result that does not parse as JSON. Both must fall through to the normal status rule
+# (which creates no done here), never blocked on tier grounds.
+reset_marker
+out="$(fire pre-edit "{\"file_path\":\"$FL4\",\"old_string\":\"DOES_NOT_EXIST_XYZ\",\"new_string\":\"\\\"tier\\\":\\\"lite\\\"\"}")"
+if denied "$out"; then ng "old_string not found on disk -> falls through, not blocked"; else ok "old_string not found on disk -> falls through, not blocked"; fi
+
+reset_marker
+out="$(fire pre-edit "{\"file_path\":\"$FL4\",\"content\":\"not valid json {{{\"}")"
+if denied "$out"; then ng "the written result does not parse as JSON -> falls through, not blocked"; else ok "the written result does not parse as JSON -> falls through, not blocked"; fi
+
+# --- 14o. A regression guard for bug 2: reformatting (changing nothing real) a file that already
+# holds a tier "lite" feature must NOT be blocked.
+mkdir -p "$WORK/p11"
+mkinit "$WORK/p11"
+FL11="$WORK/p11/feature_list.json"
+cat > "$FL11" <<'JSON'
+{"active_feature":"F05","features":[{"id":"F05","name":"e","tier":"lite","status":"pending"}]}
+JSON
+reset_marker
+reformatted="$(node -e '
+const j = { active_feature: "F05", features: [ { id: "F05", name: "e", tier: "lite", status: "pending" } ] };
+console.log(JSON.stringify(j, null, 2));
+')"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL11" "$reformatted")")"
+if denied "$out"; then ng "reformatting a file holding a tier lite feature, changing nothing -> not blocked"; else ok "reformatting a file holding a tier lite feature, changing nothing -> not blocked"; fi
+
 # --- 12. Garbage JSON on stdin -> must not explode, must not block -----------------
 out="$(printf 'not json' | bash "$GATE" pre-edit 2>/dev/null)"
 if [ -z "$out" ]; then ok "garbage stdin -> silently let through (no session lock)"; else ng "garbage stdin -> silently let through"; fi

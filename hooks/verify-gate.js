@@ -86,58 +86,105 @@ if (base !== "feature_list.json") process.exit(0);
 //      so refusing here is still a gate rather than a hard lock.
 const TIER_RANK = { lite: 0, standard: 1, strict: 2 };
 const tierOf = (f) => {
-  const t = f && typeof f.tier === "string" ? f.tier.trim() : "";
-  return t in TIER_RANK ? t : "standard";
+  const t = f && typeof f.tier === "string" ? f.tier.trim().toLowerCase() : "";
+  // hasOwnProperty, NOT the "in" operator: "in" walks the prototype chain, so
+  // tier:"toString"/"constructor"/"valueOf" would "match" a property inherited from
+  // Object.prototype, TIER_RANK[t] would return a function, and "function < number" is
+  // always NaN — meaning it slips past every comparison and is never seen as a downgrade.
+  return Object.prototype.hasOwnProperty.call(TIER_RANK, t) ? t : "standard";
 };
 
 // The file content AFTER this write. Write -> content directly; Edit/MultiEdit -> read the disk
-// and apply each old_string -> new_string in turn. Not reconstructible -> return null, and in that
-// case the tier is not judged (following the precedent: when undetermined, keep checking, never refuse blindly).
+// and apply each old_string -> new_string in turn (honouring replace_all when Claude Code sends the flag).
+// Not reconstructible -> return null, and in that case the tier is not judged (following the
+// precedent: when undetermined, keep checking, never refuse blindly).
 function resultingText() {
   if (typeof toolInput.content === "string") return toolInput.content;
   let text;
   try { text = fs.readFileSync(filePath, "utf8"); } catch { return null; }
   const edits = (toolInput.edits || []).length
     ? toolInput.edits
-    : [{ old_string: toolInput.old_string, new_string: toolInput.new_string }];
+    : [{ old_string: toolInput.old_string, new_string: toolInput.new_string, replace_all: toolInput.replace_all }];
   for (const e of edits) {
     if (!e || typeof e.old_string !== "string" || typeof e.new_string !== "string") return null;
     const i = text.indexOf(e.old_string);
     if (i < 0) return null;
-    text = text.slice(0, i) + e.new_string + text.slice(i + e.old_string.length);
+    text = e.replace_all
+      ? text.split(e.old_string).join(e.new_string)
+      : text.slice(0, i) + e.new_string + text.slice(i + e.old_string.length);
   }
   return text;
 }
 
+// Extract the list of VALID features to compare: it must be an array, and each element must be an
+// object carrying an id (string/number). A null element, or a "features" that is an object rather
+// than an array, counts as "unreadable" instead of crashing the program.
+const featuresOf = (json) => {
+  const arr = json && Array.isArray(json.features) ? json.features : null;
+  if (!arr) return null;
+  return arr.filter((f) => f && typeof f === "object" && (typeof f.id === "string" || typeof f.id === "number"));
+};
+
 const afterText = resultingText();
 if (afterText !== null) {
-  let beforeJson = null, afterJson = null;
-  try { beforeJson = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch {}
-  try { afterJson = JSON.parse(afterText); } catch {}
-  if (afterJson) {
-    const prev = new Map(((beforeJson && beforeJson.features) || []).map((f) => [f.id, tierOf(f)]));
-    for (const f of afterJson.features || []) {
-      const was = prev.has(f.id) ? prev.get(f.id) : "standard";
-      const now = tierOf(f);
-      if (TIER_RANK[now] < TIER_RANK[was]) {
-        process.stdout.write(JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "deny",
-            permissionDecisionReason:
-              "BLOCKED by harness-kit verify-gate.\n\n" +
-              "You are lowering the tier of " + (f.id || "(feature with no id)") + ": " + was + " -> " + now + ".\n" +
-              "The tier is set by the Homeowner, not the agent. The agent may only RAISE a tier.\n\n" +
-              "A new feature with no tier written falls back to \"standard\" — that is the correct default.\n" +
-              "Need tier \"lite\" (exempt from the dossier + review, but STILL runs init.sh)? That is an exemption,\n" +
-              "and an exemption needs a human signature: ask the Homeowner to edit feature_list.json themselves.\n\n" +
-              "See skill harness-kit:planning-features.",
-          },
-        }));
-        process.exit(0);
+  // Wrap the WHOLE comparison in try/catch: whatever shape the incoming JSON has (features as an
+  // object, duplicate ids, ...), this hook must not die. A dead hook = a non-zero exit printing
+  // nothing = the status rule just below never runs = the entire gate stops working, not just the
+  // tier rule. This was the most serious of the 5 bugs the review found.
+  try {
+    let beforeJson = null, afterJson = null;
+    try { beforeJson = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch {}
+    try { afterJson = JSON.parse(afterText); } catch {}
+
+    const beforeFeatures = featuresOf(beforeJson);
+    const afterFeatures = featuresOf(afterJson);
+
+    // The PREVIOUS tier is unreadable (the file on disk is broken, or "features" is not a valid
+    // array) -> do NOT judge the tier. "Unknown" is not "lowered": judging wrongly here would hard-lock
+    // a write that is REPAIRING a broken file while faithfully preserving a legitimate "lite" feature
+    // inside it — exactly what the comment below (check the contract before refusing) warns about.
+    if (beforeFeatures && afterFeatures) {
+      const beforeById = new Map(beforeFeatures.map((f) => [f.id, f]));
+      const afterById = new Map(afterFeatures.map((f) => [f.id, f]));
+
+      // Pair by id first. Features left over on both sides — one id disappearing, one new id
+      // appearing — are then paired WITH EACH OTHER in the remaining order: that is a rename or a
+      // renumbering, not a delete-plus-add. Only when a new id has no old id left to pair with is it
+      // genuinely a NEW feature (it never had a tier, so it defaults to "standard").
+      const leftoverBefore = beforeFeatures.filter((f) => !afterById.has(f.id));
+      const leftoverAfter = afterFeatures.filter((f) => !beforeById.has(f.id));
+
+      const pairs = [];
+      for (const f of afterFeatures) {
+        if (beforeById.has(f.id)) pairs.push([beforeById.get(f.id), f]);
+      }
+      const n = Math.min(leftoverBefore.length, leftoverAfter.length);
+      for (let k = 0; k < n; k++) pairs.push([leftoverBefore[k], leftoverAfter[k]]);
+      for (let k = n; k < leftoverAfter.length; k++) pairs.push([null, leftoverAfter[k]]);
+
+      for (const [beforeF, afterF] of pairs) {
+        const was = beforeF ? tierOf(beforeF) : "standard";
+        const now = tierOf(afterF);
+        if (TIER_RANK[now] < TIER_RANK[was]) {
+          process.stdout.write(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "deny",
+              permissionDecisionReason:
+                "BLOCKED by harness-kit verify-gate.\n\n" +
+                "You are lowering the tier of " + (afterF.id != null ? afterF.id : "(feature with no id)") + ": " + was + " -> " + now + ".\n" +
+                "The tier is set by the Homeowner, not the agent. The agent may only RAISE a tier.\n\n" +
+                "A new feature with no tier written falls back to \"standard\" — that is the correct default.\n" +
+                "Need tier \"lite\" (exempt from the dossier + review, but STILL runs init.sh)? That is an exemption,\n" +
+                "and an exemption needs a human signature: ask the Homeowner to edit feature_list.json themselves.\n\n" +
+                "See skill harness-kit:planning-features.",
+            },
+          }));
+          process.exit(0);
+        }
       }
     }
-  }
+  } catch { /* no JSON shape whatsoever may kill this hook mid-run */ }
 }
 // --- end of the TIER rule -------------------------------------------------
 
