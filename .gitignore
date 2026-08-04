@@ -1,3 +1,5 @@
 .tmp-tests/
 node_modules/
 .tmp-acceptance/
+.worktrees/
+.superpowers/
