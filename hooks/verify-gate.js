@@ -79,6 +79,68 @@ if (mode === "post-edit") {
 if (mode !== "pre-edit") process.exit(0);
 if (base !== "feature_list.json") process.exit(0);
 
+// --- The TIER rule --------------------------------------------------------
+// It differs from the status rule in two ways, both deliberate:
+//   1. It does NOT depend on the marker — lowering a tier is not a question of evidence but of authority.
+//   2. It does NOT fail open — a valid path always exists (do not lower the tier, or ask the Homeowner),
+//      so refusing here is still a gate rather than a hard lock.
+const TIER_RANK = { lite: 0, standard: 1, strict: 2 };
+const tierOf = (f) => {
+  const t = f && typeof f.tier === "string" ? f.tier.trim() : "";
+  return t in TIER_RANK ? t : "standard";
+};
+
+// The file content AFTER this write. Write -> content directly; Edit/MultiEdit -> read the disk
+// and apply each old_string -> new_string in turn. Not reconstructible -> return null, and in that
+// case the tier is not judged (following the precedent: when undetermined, keep checking, never refuse blindly).
+function resultingText() {
+  if (typeof toolInput.content === "string") return toolInput.content;
+  let text;
+  try { text = fs.readFileSync(filePath, "utf8"); } catch { return null; }
+  const edits = (toolInput.edits || []).length
+    ? toolInput.edits
+    : [{ old_string: toolInput.old_string, new_string: toolInput.new_string }];
+  for (const e of edits) {
+    if (!e || typeof e.old_string !== "string" || typeof e.new_string !== "string") return null;
+    const i = text.indexOf(e.old_string);
+    if (i < 0) return null;
+    text = text.slice(0, i) + e.new_string + text.slice(i + e.old_string.length);
+  }
+  return text;
+}
+
+const afterText = resultingText();
+if (afterText !== null) {
+  let beforeJson = null, afterJson = null;
+  try { beforeJson = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch {}
+  try { afterJson = JSON.parse(afterText); } catch {}
+  if (afterJson) {
+    const prev = new Map(((beforeJson && beforeJson.features) || []).map((f) => [f.id, tierOf(f)]));
+    for (const f of afterJson.features || []) {
+      const was = prev.has(f.id) ? prev.get(f.id) : "standard";
+      const now = tierOf(f);
+      if (TIER_RANK[now] < TIER_RANK[was]) {
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason:
+              "BLOCKED by harness-kit verify-gate.\n\n" +
+              "You are lowering the tier of " + (f.id || "(feature with no id)") + ": " + was + " -> " + now + ".\n" +
+              "The tier is set by the Homeowner, not the agent. The agent may only RAISE a tier.\n\n" +
+              "A new feature with no tier written falls back to \"standard\" — that is the correct default.\n" +
+              "Need tier \"lite\" (exempt from the dossier + review, but STILL runs init.sh)? That is an exemption,\n" +
+              "and an exemption needs a human signature: ask the Homeowner to edit feature_list.json themselves.\n\n" +
+              "See skill harness-kit:planning-features.",
+          },
+        }));
+        process.exit(0);
+      }
+    }
+  }
+}
+// --- end of the TIER rule -------------------------------------------------
+
 // Collect every chunk of text ABOUT TO BE written to the file.
 const incoming = [];
 if (typeof toolInput.content === "string") incoming.push(toolInput.content);

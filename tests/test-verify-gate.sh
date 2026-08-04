@@ -186,6 +186,64 @@ process.stdout.write(JSON.stringify({
 ' "$SID" | bash "$GATE" post-bash 2>&1 >/dev/null)"
 if printf '%s' "$err" | grep -q 'VERIFY OK'; then ok "init.sh run with no VERIFY OK/FAILED -> warns immediately"; else ng "init.sh run with no VERIFY OK/FAILED -> warns immediately"; fi
 
+# --- 13. Tier: the agent may only RAISE, never LOWER ------------------------------
+# This rule DIFFERS from the status rule: it does not depend on the marker and does not fail open,
+# because a valid path always exists (do not lower the tier, or ask the Homeowner). Fail-open is
+# only right when no path to satisfying the gate remains.
+mkdir -p "$WORK/p4"
+mkinit "$WORK/p4"
+FL4="$WORK/p4/feature_list.json"
+cat > "$FL4" <<'JSON'
+{"active_feature":"F01","features":[{"id":"F01","name":"a","status":"pending","tier":"strict"},{"id":"F02","name":"b","status":"pending","tier":"standard"}]}
+JSON
+
+# 13a. Lowering the tier via Edit -> BLOCKED
+reset_marker
+out="$(fire pre-edit "{\"file_path\":\"$FL4\",\"old_string\":\"\\\"tier\\\":\\\"strict\\\"\",\"new_string\":\"\\\"tier\\\":\\\"lite\\\"\"}")"
+if denied "$out"; then ok "lowering the tier via Edit -> BLOCKED"; else ng "lowering the tier via Edit -> BLOCKED"; fi
+
+# 13b. The refusal reason must say who is allowed to set the tier
+if printf '%s' "$out" | grep -q 'Homeowner'; then ok "the tier refusal names the Homeowner as the decider"; else ng "the tier refusal names the Homeowner as the decider"; fi
+
+# 13c. Lowering the tier via Write -> BLOCKED
+reset_marker
+lower="$(node -e '
+const fs=require("fs");
+const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+j.features[0].tier="standard";
+console.log(JSON.stringify(j));
+' "$FL4")"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL4" "$lower")")"
+if denied "$out"; then ok "lowering the tier via Write -> BLOCKED"; else ng "lowering the tier via Write -> BLOCKED"; fi
+
+# 13d. A NEW feature set to tier lite -> BLOCKED (lower than the standard default)
+reset_marker
+added="$(node -e '
+const fs=require("fs");
+const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+j.features.push({id:"F09",name:"c",status:"pending",tier:"lite"});
+console.log(JSON.stringify(j));
+' "$FL4")"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL4" "$added")")"
+if denied "$out"; then ok "a new feature set to tier lite -> BLOCKED"; else ng "a new feature set to tier lite -> BLOCKED"; fi
+
+# 13e. RAISING the tier -> allowed
+reset_marker
+raise="$(node -e '
+const fs=require("fs");
+const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+j.features[1].tier="strict";
+console.log(JSON.stringify(j));
+' "$FL4")"
+out="$(fire pre-edit "$(node -e 'console.log(JSON.stringify({file_path: process.argv[1], content: process.argv[2]}))' "$FL4" "$raise")")"
+if denied "$out"; then ng "raising the tier -> allowed"; else ok "raising the tier -> allowed"; fi
+
+# 13f. Still BLOCKED with a marker present — the tier rule does not depend on verify evidence
+reset_marker
+fire post-bash '{}' 'VERIFY OK (all)' >/dev/null
+out="$(fire pre-edit "{\"file_path\":\"$FL4\",\"old_string\":\"\\\"tier\\\":\\\"strict\\\"\",\"new_string\":\"\\\"tier\\\":\\\"lite\\\"\"}")"
+if denied "$out"; then ok "still BLOCKED with a marker present"; else ng "still BLOCKED with a marker present"; fi
+
 # --- 12. Garbage JSON on stdin -> must not explode, must not block -----------------
 out="$(printf 'not json' | bash "$GATE" pre-edit 2>/dev/null)"
 if [ -z "$out" ]; then ok "garbage stdin -> silently let through (no session lock)"; else ng "garbage stdin -> silently let through"; fi
