@@ -351,6 +351,27 @@ if grep -qF './init.sh lang' "$CM"; then ok "CLAUDE.md points at ./init.sh lang"
 if grep -qF '**English only**' "$UH"; then ok "using-harness lists English-only as a guardrail"; else ng "using-harness lists English-only as a guardrail"; fi
 
 echo ""
+echo "== tier in the template =="
+
+FLT="$KIT/template/feature_list.json"
+tier_of() { node -e '
+const fs = require("fs");
+const j = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const f = j.features.find(x => x.id === process.argv[2]);
+console.log(f && f.tier ? f.tier : "");
+' "$(win "$1")" "$2"; }
+
+for pair in "F01 standard" "F02 strict" "F03 strict"; do
+  set -- $pair
+  got="$(tier_of "$FLT" "$1")"
+  if [ "$got" = "$2" ]; then ok "template $1 has tier=$2"
+  else ng "template $1 has tier=$2 (found: ${got:-none})"; fi
+done
+
+if grep -q 'lite' "$FLT"; then ok "feature_list.json explains the tier scale"
+else ng "feature_list.json explains the tier scale"; fi
+
+echo ""
 echo "== _TEMPLATE.md =="
 
 P="$(new_project)"

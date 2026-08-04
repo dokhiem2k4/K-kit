@@ -5,9 +5,10 @@
   "active_feature": "F01",
   "legend": {
     "status": ["pending", "in_progress", "blocked", "done", "verified", "deferred"],
+    "tier": ["lite", "standard", "strict"],
     "rule": "One feature at a time. 'done' needs evidence in progress.md. Dependencies must be done first. Replace the examples below with the real features of {{PROJECT_NAME}}."
   },
-  "_howto": "Every feature NEEDS: id, name, description, status (required by the validator). Add scope/done_when/verify so the Builder knows the boundaries and the test criteria. done_when must be testable. dependencies = list of ids that must finish first. doc = path to the dossier docs/features/<ID>-<slug>.md, REQUIRED once status is done/verified — ./init.sh docs checks for all 8 sections, in order, with no placeholders left.",
+  "_howto": "Every feature NEEDS: id, name, description, status (required by the validator). Add scope/done_when/verify so the Builder knows the boundaries and the test criteria. done_when must be testable. dependencies = list of ids that must finish first. doc = path to the dossier docs/features/<ID>-<slug>.md, REQUIRED once status is done/verified. tier = lite|standard|strict, ABSENT = standard; the Homeowner sets the tier, the agent may only RAISE it (verify-gate blocks every attempt to lower it). lite = exempt from the dossier + review, but still must run init.sh; strict = section 9 Rollback must have real content. ./init.sh docs checks according to the tier.",
   "features": [
     {
       "id": "F01",
@@ -15,6 +16,8 @@
       "description": "Stand up the project skeleton ({{STACK}}): directory structure per the Blueprint + .env.example + README. An empty build passes.",
       "dependencies": [],
       "status": "pending",
+      "tier": "standard",
+      "tier": "standard",
       "doc": "docs/features/F01-scaffold.md",
       "scope": ["directory structure per the Blueprint", ".env.example (lists every secret/config)", "README.md", "build/lint/test config"],
       "done_when": [
@@ -30,6 +33,8 @@
       "description": "Schema/DB + migrations + access constraints (RLS/authz) if any. Replace with the real thing.",
       "dependencies": ["F01"],
       "status": "pending",
+      "tier": "strict",
+      "tier": "strict",
       "doc": "docs/features/F02-data-layer.md",
       "scope": ["schema + migrations", "access control (RLS/authz)", "seed/fixtures if needed"],
       "done_when": ["migrations apply cleanly", "access control blocks cross-user reads (test)"],
@@ -41,6 +46,8 @@
       "description": "Login/logout + protected routes + a me/profile endpoint. Replace with the real thing.",
       "dependencies": ["F01", "F02"],
       "status": "pending",
+      "tier": "strict",
+      "tier": "strict",
       "doc": "docs/features/F03-auth.md",
       "scope": ["login/logout", "protected routes / guard", "GET me/profile"],
       "done_when": ["a protected endpoint with no token -> 401", "a protected route redirects when not logged in"],
