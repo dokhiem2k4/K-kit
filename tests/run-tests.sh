@@ -399,13 +399,25 @@ T="$P/docs/features/_TEMPLATE.md"
 
 if [ -f "$T" ]; then ok "bootstrap copies docs/features/_TEMPLATE.md"; else ng "bootstrap copies docs/features/_TEMPLATE.md"; fi
 
-nums="$(grep -E '^##[[:space:]]+[1-8]\.' "$T" 2>/dev/null \
-  | sed -E 's/^##[[:space:]]+([1-8])\..*/\1/' | tr '\n' ',' | sed 's/,$//')"
-if [ "$nums" = "1,2,3,4,5,6,7,8" ]; then
-  ok "_TEMPLATE.md has all 8 sections in order"
+nums="$(grep -E '^##[[:space:]]+[1-9]\.' "$T" 2>/dev/null \
+  | sed -E 's/^##[[:space:]]+([1-9])\..*/\1/' | tr '\n' ',' | sed 's/,$//')"
+if [ "$nums" = "1,2,3,4,5,6,7,8,9" ]; then
+  ok "_TEMPLATE.md has all 9 sections in order"
 else
-  ng "_TEMPLATE.md has all 8 sections in order (currently: ${nums:-none})"
+  ng "_TEMPLATE.md has all 9 sections in order (currently: ${nums:-none})"
 fi
+
+# The frontmatter replaces the old blockquote metadata line. Three of its fields mirror
+# feature_list.json and are gated; the other five belong to the dossier alone.
+if head -1 "$T" | grep -q '^---$'; then ok "_TEMPLATE.md opens with frontmatter"; else ng "_TEMPLATE.md opens with frontmatter"; fi
+for k in feature status tier date commit blueprint security reversible; do
+  if grep -qE "^${k}:" "$T"; then ok "_TEMPLATE.md frontmatter has the key $k"; else ng "_TEMPLATE.md frontmatter has the key $k"; fi
+done
+
+# Section 9 anchors on three fixed labels, the same way the check anchors on "## N.".
+if grep -qF '**How to revert:**' "$T"; then ok "_TEMPLATE.md section 9 has the How-to-revert label"; else ng "_TEMPLATE.md section 9 has the How-to-revert label"; fi
+if grep -qF '**CANNOT be reverted:**' "$T"; then ok "_TEMPLATE.md section 9 has the CANNOT-be-reverted label"; else ng "_TEMPLATE.md section 9 has the CANNOT-be-reverted label"; fi
+if grep -qF '**Signs a rollback is needed:**' "$T"; then ok "_TEMPLATE.md section 9 has the Signs label"; else ng "_TEMPLATE.md section 9 has the Signs label"; fi
 
 if grep -q '<TODO:' "$T" 2>/dev/null; then ok "_TEMPLATE.md uses the <TODO: marker"; else ng "_TEMPLATE.md is missing the <TODO: marker"; fi
 if grep -q '<!--' "$T" 2>/dev/null; then ok "_TEMPLATE.md carries guidance comments"; else ng "_TEMPLATE.md is missing guidance comments"; fi
