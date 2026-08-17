@@ -45,12 +45,22 @@ fs.writeFileSync(file, JSON.stringify(j, null, 2));
 ' "$(win "$1")" "$2" "$3"
 }
 
-# Print a valid dossier (all 8 sections, no placeholders).
+# Print a valid dossier (frontmatter + all 9 sections, no placeholders).
+# The fixture's tier is standard, so section 9 may be "—"; the strict cases below rewrite it.
 valid_dossier() {
   cat <<'MD'
-# F01 — Scaffold project
+---
+feature: F01
+status: done
+tier: standard
+date: 2026-07-23
+commit: a1b2c3d
+blueprint: §1
+security: passed
+reversible: true
+---
 
-> **Status:** done · **Date:** 2026-07-23 · **Commit:** a1b2c3d · **Blueprint:** §1
+# F01 — Scaffold project
 
 ## 1. Why it matters
 Lays the foundation for every later feature; both F02 and F03 build on it.
@@ -75,6 +85,14 @@ Renaming the build script means updating `init.sh` too.
 
 ## 8. Updates
 2026-07-23 — created.
+
+## 9. Rollback & Recovery
+
+**How to revert:** `git revert <sha>` — the scaffold leaves no state outside the repo.
+
+**CANNOT be reverted:** —
+
+**Signs a rollback is needed:** —
 MD
 }
 
@@ -114,13 +132,13 @@ P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 mkdir -p "$P/docs/features"
 valid_dossier | sed '/^## 6\./,$d' > "$P/$DOC"
-expect_docs "sections 6-8 missing -> fail" 1 "$P"
+expect_docs "sections 6-9 missing -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 mkdir -p "$P/docs/features"
 valid_dossier | sed -e 's/^## 2\./## X./' -e 's/^## 8\./## 2./' -e 's/^## X\./## 8./' > "$P/$DOC"
-expect_docs "8 sections in the wrong order -> fail" 1 "$P"
+expect_docs "9 sections in the wrong order -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
@@ -144,6 +162,69 @@ P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"verified\",\"doc\":\"$DOC\"}"
 rm -f "$P/$DOC"
 expect_all "status verified with no dossier -> ./init.sh all fails" 1 "$P"
+
+echo ""
+# --- tier changes what a dossier must be, not whether verify runs ----------------
+P="$(new_project)"
+patch_feature "$P" F01 '{"status":"done","tier":"lite","doc":null}'
+expect_docs "tier lite done needs no dossier at all -> pass" 0 "$P"
+
+P="$(new_project)"
+patch_feature "$P" F01 "{\"status\":\"done\",\"tier\":\"medium\",\"doc\":\"$DOC\"}"
+mkdir -p "$P/docs/features"; valid_dossier > "$P/$DOC"
+expect_docs "a tier outside the scale -> fail" 1 "$P"
+
+# --- frontmatter: three mirrored fields, gated ------------------------------------
+P="$(new_project)"
+patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
+mkdir -p "$P/docs/features"; valid_dossier | sed '1,11d' > "$P/$DOC"
+expect_docs "a dossier with no frontmatter -> fail" 1 "$P"
+
+P="$(new_project)"
+patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
+mkdir -p "$P/docs/features"; valid_dossier | sed 's/^feature: F01$/feature: F99/' > "$P/$DOC"
+expect_docs "frontmatter feature disagreeing with feature_list -> fail" 1 "$P"
+
+P="$(new_project)"
+patch_feature "$P" F01 "{\"status\":\"verified\",\"doc\":\"$DOC\"}"
+mkdir -p "$P/docs/features"; valid_dossier > "$P/$DOC"
+expect_docs "frontmatter status=done while feature_list says verified -> fail" 1 "$P"
+
+P="$(new_project)"
+patch_feature "$P" F01 "{\"status\":\"done\",\"tier\":\"strict\",\"doc\":\"$DOC\"}"
+mkdir -p "$P/docs/features"; valid_dossier > "$P/$DOC"
+expect_docs "frontmatter tier=standard while feature_list says strict -> fail" 1 "$P"
+
+# --- tier strict: section 9 must say something -----------------------------------
+mk_strict() {
+  patch_feature "$1" F01 "{\"status\":\"done\",\"tier\":\"strict\",\"doc\":\"$DOC\"}"
+  mkdir -p "$1/docs/features"
+}
+P="$(new_project)"; mk_strict "$P"
+valid_dossier | sed -e 's/^tier: standard$/tier: strict/' \
+  -e 's|^\*\*How to revert:\*\*.*|**How to revert:** —|' > "$P/$DOC"
+expect_docs "tier strict with How-to-revert set to a dash -> fail" 1 "$P"
+
+P="$(new_project)"; mk_strict "$P"
+valid_dossier | sed -e 's/^tier: standard$/tier: strict/' \
+  -e '/^\*\*Signs a rollback is needed:\*\*/d' > "$P/$DOC"
+expect_docs "tier strict missing the Signs label -> fail" 1 "$P"
+
+P="$(new_project)"; mk_strict "$P"
+valid_dossier | sed 's/^tier: standard$/tier: strict/' > "$P/$DOC"
+expect_docs "tier strict fully filled in -> pass" 0 "$P"
+
+# --- reversible: a self-declared field must not gate itself ----------------------
+# Making it block the ship would only teach the agent to write reversible: true. It warns; the
+# stopping rule lives in shipping-a-feature as an L3 escalation.
+P="$(new_project)"; mk_strict "$P"
+valid_dossier | sed -e 's/^tier: standard$/tier: strict/' -e 's/^reversible: true$/reversible: false/' > "$P/$DOC"
+expect_docs "reversible false at strict -> still passes (warning only)" 0 "$P"
+# Collect first, then grep — piping into `grep -q` makes grep exit early, the upstream command
+# takes SIGPIPE, and `set -o pipefail` reports non-zero. Documented near the top of this file;
+# walked into anyway.
+wout="$(bash "$P/init.sh" docs 2>&1)"
+if printf '%s' "$wout" | grep -qF 'WARN'; then ok "reversible false at strict -> prints a warning"; else ng "reversible false at strict -> prints a warning"; fi
 
 echo ""
 echo "== check_lang: the English-only invariant =="
