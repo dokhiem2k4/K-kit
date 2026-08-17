@@ -253,8 +253,8 @@ with the plugin — and no single process ever holds both, so it cannot be gener
 It had already drifted (6 boxes against 8) before anyone noticed. Two copies, held by assertions,
 the same shape as the `VERIFY OK` contract:
 
-- **coverage** — each of the 8 canonical items matches in *both* files
-- **a count pin** — each file has exactly 8 checkboxes
+- **coverage** — each of the 9 canonical items matches in *both* files
+- **a count pin** — each file has exactly 9 checkboxes
 
 Only the second has teeth: coverage proves *what I know about is present*; the count proves *nothing
 exists that I do not know about*. Both were verified by mutation, not assumed — adding an undeclared

@@ -1032,6 +1032,7 @@ SHIP_ITEMS=(
   "state|progress\.md"
   "dossier|[Dd]ossier"
   "docs|Diataxis"
+  "worktree|git worktree remove"
   "commit|PR"
 )
 
