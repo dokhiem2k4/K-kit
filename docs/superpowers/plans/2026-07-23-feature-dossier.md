@@ -785,7 +785,7 @@ cd "<path>/harness-kit"
 rm -rf .tmp-tests/audit && mkdir -p .tmp-tests/audit
 W() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf %s "$1"; fi; }
 node "$(W "$PWD/bootstrap.mjs")" --target "$(W "$PWD/.tmp-tests/audit")" --name "Audit Project" --stack "node"
-node "$(W "C:/Users/ADMIN/.claude/skills/harness-creator/scripts/validate-harness.mjs")" \
+node "$(W "<path-to-harness-creator>/scripts/validate-harness.mjs")" \
      --target "$(W "$PWD/.tmp-tests/audit")"
 rm -rf .tmp-tests
 ```
