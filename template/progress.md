@@ -18,6 +18,12 @@
 | F03 | Auth | F01,F02 | pending |
 
 ## Log (newest first)
+Each entry tied to a feature carries its id in the heading: `### {{DATE}} — <ID>: <title>`. Once
+that feature ships (status done/verified + dossier written), move the full entry into
+`progress-archive.md` and replace it here with a one-line pointer:
+`### {{DATE}} — <ID>: <title> (shipped — see progress-archive.md)`.
+`./init.sh state` fails if a shipped feature's entry is still here untagged.
+
 ### {{DATE}} — Harness setup
 - Stood up the harness from the harness-kit template. No product code yet.
 

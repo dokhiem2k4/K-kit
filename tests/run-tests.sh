@@ -603,6 +603,20 @@ else
   ng "bootstrap --dry-run lists docs/features/_TEMPLATE.md"
 fi
 
+if printf '%s' "$out" | grep -qF 'progress-archive.md'; then
+  ok "bootstrap --dry-run lists progress-archive.md"
+else
+  ng "bootstrap --dry-run lists progress-archive.md"
+fi
+
+P="$(new_project)"
+if [ -f "$P/progress-archive.md" ]; then ok "bootstrap copies progress-archive.md"; else ng "bootstrap copies progress-archive.md"; fi
+if grep -qF 'shipped — see progress-archive.md' "$P/progress.md"; then
+  ok "progress.md documents the shipped-pointer tag verbatim"
+else
+  ng "progress.md documents the shipped-pointer tag verbatim"
+fi
+
 # ./init.sh all must run the FEATURE DOCS block
 P="$(new_project)"
 out="$(bash "$P/init.sh" all 2>&1)"
