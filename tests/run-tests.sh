@@ -1048,5 +1048,51 @@ done
 if grep -qF '9 sections' "$KIT/template/CLAUDE.md"; then ok "CLAUDE.md DoD says 9 sections"; else ng "CLAUDE.md DoD says 9 sections"; fi
 
 echo ""
+echo "== check_state: progress.md compaction for shipped features =="
+
+expect_state() {
+  local desc="$1" want="$2" proj="$3" got
+  bash "$proj/init.sh" state >/dev/null 2>&1
+  got=$?
+  if [ "$got" -eq "$want" ]; then ok "$desc"; else ng "$desc (exit=$got, want=$want)"; fi
+}
+
+P="$(new_project)"
+expect_state "no done features yet -> pass" 0 "$P"
+out="$(bash "$P/init.sh" state 2>&1)"
+if printf '%s' "$out" | grep -qF 'nothing to archive yet'; then
+  ok "no done features -> says nothing to archive yet"
+else
+  ng "no done features -> says nothing to archive yet"
+fi
+
+P="$(new_project)"
+patch_feature "$P" F01 '{"status":"done"}'
+printf '%s\n' '### 2026-08-17 — F01: Scaffold project' >> "$P/progress.md"
+expect_state "a shipped feature with an untagged Log entry -> fail" 1 "$P"
+out="$(bash "$P/init.sh" state 2>&1)"
+if printf '%s' "$out" | grep -qF 'F01'; then ok "the failure names the feature id"; else ng "the failure names the feature id"; fi
+
+P="$(new_project)"
+patch_feature "$P" F01 '{"status":"done"}'
+printf '%s\n' '### 2026-08-17 — F01: Scaffold project (shipped — see progress-archive.md)' >> "$P/progress.md"
+expect_state "a shipped feature with a tagged pointer -> pass" 0 "$P"
+
+P="$(new_project)"
+patch_feature "$P" F01 '{"status":"pending"}'
+printf '%s\n' '### 2026-08-17 — F01: Scaffold project' >> "$P/progress.md"
+expect_state "an in-progress feature's Log entry is never required to be tagged -> pass" 0 "$P"
+
+P="$(new_project)"
+mv "$P/scripts/check-state.mjs" "$P/scripts/check-state.mjs.bak"
+expect_state "a missing validator fails rather than skipping -> fail" 1 "$P"
+mv "$P/scripts/check-state.mjs.bak" "$P/scripts/check-state.mjs"
+expect_state "restoring the validator makes it green again" 0 "$P"
+
+P="$(new_project)"
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "STATE ("; then ok "./init.sh all does run check_state"; else ng "./init.sh all does run check_state"; fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verification runner — {{PROJECT_NAME}}
-# Usage: ./init.sh [scaffold|build|secret|docs|lang|all]   (default: all)
+# Usage: ./init.sh [scaffold|build|secret|docs|state|lang|all]   (default: all)
 # CUSTOMIZE: edit the CONFIG variables + the check_build/check_secret functions for your stack.
 # Fail-fast: build/typecheck hard errors stop inside their own target (set -e semantics);
 # the runner aggregates FAIL so the remaining checks still get reported.
@@ -113,6 +113,24 @@ check_docs() {
   node scripts/check-docs.mjs || FAIL=1
 }
 
+# Every done/verified feature's Log entry in progress.md must be archived into progress-archive.md
+# once shipped (a one-line pointer left behind). Rules live in scripts/check-state.mjs; this
+# function only decides whether to run it.
+check_state() {
+  step "STATE (progress.md compaction for shipped features)"
+  command -v node >/dev/null 2>&1 || { skip "no node — cannot validate progress.md compaction"; return; }
+  [ -f feature_list.json ] || { skip "no feature_list.json"; return; }
+  # A missing validator FAILs rather than SKIPs, for the same reason check_docs does: a counted
+  # SKIP still prints VERIFY OK, handing back the bypass the gate exists to remove.
+  if [ ! -f scripts/check-state.mjs ]; then
+    echo "   [FAIL] scripts/check-state.mjs is missing — the state validator was removed"
+    echo "   Restore it (bootstrap --force) or delete check_state from this file deliberately."
+    FAIL=1
+    return
+  fi
+  node scripts/check-state.mjs || FAIL=1
+}
+
 # Invariant: every artifact in this repo is written in English. See CLAUDE.md, section "Language".
 # The detection itself lives in scripts/check-lang.mjs; this function decides WHAT gets checked.
 # CUSTOMIZE: directories never scanned, and the size ceiling for a single file.
@@ -155,8 +173,9 @@ case "$TARGET" in
   build)    check_build ;;
   secret)   check_secret ;;
   docs)     check_docs ;;
+  state)    check_state ;;
   lang)     : ;;                 # nothing extra — the unconditional run below is the whole target
-  all)      check_scaffold; check_build; check_secret; check_docs ;;
+  all)      check_scaffold; check_build; check_secret; check_docs; check_state ;;
   *) echo "unknown target: $TARGET"; exit 2 ;;
 esac
 
