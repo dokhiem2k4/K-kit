@@ -225,10 +225,60 @@ fs.writeFileSync(process.argv[1] + "/logo.png", Buffer.from([0x89, 0x50, 0x4e, 0
 expect_lang "a binary file is skipped, not misread as text -> pass" 0 "$P"
 rm -f "$P/logo.png"
 
+# --- ASCII Vietnamese: the half a character class cannot see ---------------------
+# Diacritics are the easy case. Vietnamese typed without them is plain ASCII, and the original
+# version of this very repo was written that way — so a check that only looked for diacritics would
+# have missed the exact problem it exists for. Vocabulary is the signal instead: 3 distinct
+# Vietnamese words on one line.
+# The probe words are assembled from an array holding at most two per source line. Written as one
+# sentence, this file would trip the very check it is testing — the ASCII half has no \u escape to
+# hide behind, so the fixture has to be built rather than typed.
+node -e '
+const fs = require("fs");
+const w = ["Ham", "nay",
+           "kiem", "tra",
+           "dieu", "kien",
+           "dau", "vao"];
+fs.writeFileSync(process.argv[1], "// " + w.join(" ") + "\nmodule.exports = 1;\n");
+' "$(win "$P/ascii-vn.js")"
+expect_lang "ASCII Vietnamese with no diacritics -> fail" 1 "$P"
+out="$(bash "$P/init.sh" lang 2>&1)"
+if printf '%s' "$out" | grep -qF 'ascii-vn.js:1'; then ok "the ASCII case names the file and the words that matched"; else ng "the ASCII case names the file and the words that matched"; fi
+rm -f "$P/ascii-vn.js"
+
+# ...and ordinary English prose must stay quiet. Several of the listed words are plausible English
+# fragments in isolation, so this is the assertion that keeps the threshold honest.
+cat > "$P/plain-english.js" <<'ENEOF'
+// This handler checks the input condition before writing it to the database.
+// If the value is not valid we return an error, and we do not skip this step.
+// A man in the middle can do so much damage that we can not take the chance.
+module.exports = 1;
+ENEOF
+expect_lang "ordinary English prose does not trip the word list -> pass" 0 "$P"
+rm -f "$P/plain-english.js"
+
+# One Vietnamese word alone is an identifier, not prose. Two is still a coincidence worth allowing.
+node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1] + "/one-word.js", "const cho = 1;\nmodule.exports = cho;\n");
+' "$(win "$P")"
+expect_lang "a single Vietnamese-looking identifier is not flagged -> pass" 0 "$P"
+rm -f "$P/one-word.js"
+
+# The validator carries the word list, so it is excluded from its own scan. Without that it reports
+# itself on every run — which it did, 27 lines of it, the first time this was executed.
+if grep -qF 'const SELF' "$P/scripts/check-lang.mjs"; then ok "the validator excludes itself from the scan"; else ng "the validator excludes itself from the scan"; fi
+
+# Deleting the validator must FAIL, not SKIP. A counted SKIP still prints VERIFY OK, which would mint
+# a marker and hand back the very bypass this check exists to remove.
+mv "$P/scripts/check-lang.mjs" "$P/scripts/check-lang.mjs.bak"
+expect_lang "a missing validator fails rather than skipping -> fail" 1 "$P"
+mv "$P/scripts/check-lang.mjs.bak" "$P/scripts/check-lang.mjs"
+expect_lang "restoring the validator makes it green again" 0 "$P"
+
 # The check must be honest about what it cannot see: ASCII-only Vietnamese is undetectable by grep,
 # and a green result must not be sold as proof of the whole invariant.
-I="$KIT/template/init.sh"
-if grep -qF 'does NOT prove' "$I"; then ok "check_lang states that green is not proof"; else ng "check_lang states that green is not proof"; fi
+if grep -qF 'does NOT prove' "$KIT/template/scripts/check-lang.mjs"; then ok "check_lang states that green is not proof"; else ng "check_lang states that green is not proof"; fi
 
 # The instructions must carry the rule, in both places an agent actually reads.
 # Plain grep rather than has(): that helper is defined further down, in the instruction-wiring section.

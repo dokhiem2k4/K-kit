@@ -133,68 +133,24 @@ process.exit(bad);
 }
 
 # Invariant: every artifact in this repo is written in English. See CLAUDE.md, section "Language".
-#
-# WHAT THIS CAN AND CANNOT SEE. It detects Vietnamese *diacritic* characters, which no English text
-# uses, so a hit is unambiguous. Vietnamese written WITHOUT diacritics is plain ASCII and no grep can
-# separate it from identifiers or abbreviations. So a green result is evidence of one half of the
-# rule, never proof of the whole of it — do not read it as "the repo is English".
-#
-# Scans EVERY text file rather than an allowlist of extensions. An allowlist silently ignores
-# Dockerfile, Makefile, *.rst, *.toml and whatever nobody thought of; the exclusion is by directory
-# and by actual binary content (a NUL byte), not by filename.
+# The detection itself lives in scripts/check-lang.mjs; this function decides WHAT gets checked.
 # CUSTOMIZE: directories never scanned, and the size ceiling for a single file.
 LANG_SKIP_DIRS=".git node_modules dist build .next out target vendor coverage .venv __pycache__ .tmp-tests"
 LANG_MAX_KB=512
 check_lang() {
   step "LANGUAGE (English-only invariant)"
   command -v node >/dev/null 2>&1 || { skip "no node — cannot check the language invariant"; return; }
+  # A missing validator FAILs rather than SKIPs. A missing `node` is the environment's doing, so that
+  # fails open; a missing scripts/check-lang.mjs means part of the harness was deleted, and a counted
+  # SKIP would still print VERIFY OK — handing back the exact bypass this check exists to remove.
+  if [ ! -f scripts/check-lang.mjs ]; then
+    echo "   [FAIL] scripts/check-lang.mjs is missing — the language validator was removed"
+    echo "   Restore it (bootstrap --force) or delete check_lang from this file deliberately."
+    FAIL=1
+    return
+  fi
 
-  node -e '
-const fs = require("fs");
-const path = require("path");
-const SKIP = new Set(process.argv[1].split(" ").filter(Boolean));
-const MAXB = parseInt(process.argv[2], 10) * 1024;
-// Extensions that are binary by definition. Everything else is read and sniffed for a NUL byte,
-// so an unknown text format is scanned rather than skipped.
-const BIN = new Set([".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".pdf", ".zip", ".gz", ".tgz",
-                     ".woff", ".woff2", ".ttf", ".otf", ".eot", ".mp3", ".mp4", ".mov", ".wasm",
-                     ".so", ".dylib", ".dll", ".exe", ".class", ".jar", ".bin"]);
-// Vietnamese-distinctive code points: the Latin Extended Additional block (U+1EA0-U+1EF9, in practice
-// only Vietnamese uses it), the letters a-breve / d-stroke / o-horn / u-horn, and the circumflex vowels.
-// Written as \u escapes on purpose: spelling the characters out would make this very line the first
-// thing the check reports.
-const VN = new RegExp("[\\u1EA0-\\u1EF9\\u0102\\u0103\\u0110\\u0111"
-                   + "\\u01A0\\u01A1\\u01AF\\u01B0\\u00C2\\u00E2\\u00CA\\u00EA\\u00D4\\u00F4]");
-const hits = [];
-const walk = (dir) => {
-  let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-  for (const e of entries) {
-    const p = path.join(dir, e.name);
-    if (e.isSymbolicLink()) continue;
-    if (e.isDirectory()) { if (!SKIP.has(e.name)) walk(p); continue; }
-    if (BIN.has(path.extname(e.name).toLowerCase())) continue;
-    let buf;
-    try {
-      if (fs.statSync(p).size > MAXB) continue;
-      buf = fs.readFileSync(p);
-    } catch { continue; }
-    if (buf.includes(0)) continue;                       // binary whatever the name says
-    buf.toString("utf8").split(/\r?\n/).forEach((line, i) => {
-      if (VN.test(line)) hits.push(p.replace(/^\.[\\\/]/, "") + ":" + (i + 1) + ": " + line.trim().slice(0, 90));
-    });
-  }
-};
-walk(".");
-if (hits.length) {
-  console.log("   [FAIL] non-English text in " + hits.length + " line(s):");
-  for (const h of hits.slice(0, 15)) console.log("      " + h);
-  if (hits.length > 15) console.log("      ... and " + (hits.length - 15) + " more");
-  console.log("   Everything this repo contains is written in English. See CLAUDE.md, section \"Language\".");
-  process.exit(1);
-}
-console.log("   OK: 0 lines with non-English diacritics (does NOT prove the whole invariant)");
-' "$LANG_SKIP_DIRS" "$LANG_MAX_KB" || FAIL=1
+  node scripts/check-lang.mjs files "$LANG_SKIP_DIRS" "$LANG_MAX_KB" || FAIL=1
 
   # Commit messages are artifacts too, and the rule names them explicitly.
   # Only messages NOT YET PUSHED are checked. Published history cannot be corrected without a
@@ -209,18 +165,7 @@ console.log("   OK: 0 lines with non-English diacritics (does NOT prove the whol
   elif ! git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
     skip "branch has no upstream — cannot tell pushed from unpushed commits, messages not checked"
   else
-    node -e '
-const VN = new RegExp("[\\u1EA0-\\u1EF9\\u0102\\u0103\\u0110\\u0111"
-                   + "\\u01A0\\u01A1\\u01AF\\u01B0\\u00C2\\u00E2\\u00CA\\u00EA\\u00D4\\u00F4]");
-const bad = process.argv[1].split(/\r?\n/).filter((l) => VN.test(l));
-if (bad.length) {
-  console.log("   [FAIL] non-English text in " + bad.length + " unpushed commit message line(s):");
-  for (const b of bad.slice(0, 10)) console.log("      " + b.trim().slice(0, 100));
-  console.log("   Reword them before pushing: git rebase -i @{u}");
-  process.exit(1);
-}
-console.log("   OK: unpushed commit messages are English");
-' "$(git log --format='%h %s%n%b' '@{u}..HEAD' 2>/dev/null)" || FAIL=1
+    node scripts/check-lang.mjs messages "$(git log --format='%h %s%n%b' '@{u}..HEAD' 2>/dev/null)" || FAIL=1
   fi
 }
 

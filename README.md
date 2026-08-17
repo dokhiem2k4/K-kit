@@ -163,16 +163,31 @@ byte rather than by their name. Commit messages count as artifacts too, but only
 checked: published history cannot be corrected without a force-push, so scanning it would turn
 `init.sh` permanently red on adoption over something nobody is allowed to fix.
 
-**What the check can and cannot see.** It detects Vietnamese diacritics, which English never uses, so
-a hit is unambiguous and it names the file and line. Vietnamese written *without* diacritics is plain
-ASCII and no grep can separate it from identifiers or abbreviations — measured against this repo's own
-pre-translation state, the check caught 16 of the 31 non-English files. So a green `lang` result is
-evidence for one half of the rule and never proof of the whole of it, and the check says exactly that
-in its own output rather than letting a clean run be mistaken for a clean repo.
+**Two signals, because one was not enough.** Diacritics are the easy half: English never uses them, so
+a hit is unambiguous. The hard half is Vietnamese typed *without* diacritics — plain ASCII, invisible
+to any character class. The original version of this very repo was written that way, so a
+diacritics-only check would have missed the exact problem it exists for: measured, it caught 16 of the
+31 affected files.
+
+So the second signal is vocabulary: a 306-word list of Vietnamese syllables that are neither English
+words nor plausible identifiers, requiring **3 distinct hits on one line**. One alone is an identifier;
+three is prose. The list was derived from a real Vietnamese version of this repo rather than invented,
+and the threshold was measured in both directions:
+
+| | 1 hit | 2 hits | 3 hits |
+|---|---|---|---|
+| 288k lines of English source (Python stdlib) | 314 lines flagged | 12 (romanised Thai in a codec table) | **0** |
+| the Vietnamese version of this repo | — | — | **31 of 31 files, no clean file flagged** |
+
+**It is still a screen, not a proof**, and the check says so in its own output. Vocabulary it does not
+know, or spread thinly enough that no line reaches three, passes. The diacritic half is not perfectly
+silent either — on that same corpus it flags 2 lines, both a Latin-1 accented-character table.
+Accented letters shared with French stay in the class anyway, because dropping them would blind it to
+words as common as `khong`.
 
 ## Four test tiers
 ```bash
-bash tests/run-tests.sh                # structure  — 164 assertions, costs no tokens
+bash tests/run-tests.sh                # structure  — 171 assertions, costs no tokens
 bash tests/test-verify-gate.sh         # mechanism  — 18 assertions, feeds event JSON into the hook
 bash tests/acceptance.sh               # routing    — 5 real sessions: does it invoke the right gate skill
 bash tests/eval-faithfulness.sh        # fabrication — 5 real sessions: does it mark done with NO evidence
