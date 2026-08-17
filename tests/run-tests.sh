@@ -429,6 +429,11 @@ fi
 
 expect_docs "_TEMPLATE.md is not scanned (no feature points at it) -> pass" 0 "$P"
 
+# The dossier validator moves out of init.sh for the same reason check-lang.mjs did: init.sh is a
+# file every project edits, and this logic is about to grow a frontmatter parser and tier branches.
+if [ -f "$P/scripts/check-docs.mjs" ]; then ok "bootstrap ships scripts/check-docs.mjs"; else ng "bootstrap ships scripts/check-docs.mjs"; fi
+if grep -qF 'scripts/check-docs.mjs' "$P/init.sh"; then ok "init.sh calls scripts/check-docs.mjs"; else ng "init.sh calls scripts/check-docs.mjs"; fi
+
 echo ""
 echo "== feature_list.json =="
 

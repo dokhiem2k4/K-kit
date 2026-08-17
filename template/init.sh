@@ -96,40 +96,21 @@ check_secret() {
   [ "$found" -eq 1 ] && FAIL=1 || echo "   OK: 0 secrets in the client bundle"
 }
 
-# Every done/verified feature must have a dossier at docs/features/<ID>-<slug>.md with all 8 sections.
+# Every done/verified feature must have a dossier at docs/features/<ID>-<slug>.md.
+# The rules live in scripts/check-docs.mjs; this function only decides whether to run it.
 check_docs() {
   step "FEATURE DOCS (dossier for done/verified features)"
   command -v node >/dev/null 2>&1 || { skip "no node — cannot validate dossiers"; return; }
   [ -f feature_list.json ] || { skip "no feature_list.json"; return; }
-  node -e '
-const fs = require("fs");
-const j = JSON.parse(fs.readFileSync("feature_list.json", "utf8"));
-const DONE = ["done", "verified"];
-const WANT = "1,2,3,4,5,6,7,8";
-let bad = 0, n = 0;
-const fail = (id, msg) => { console.log("   [FAIL] " + id + ": " + msg); bad = 1; };
-for (const f of (j.features || [])) {
-  if (!DONE.includes(f.status)) continue;
-  n++;
-  const id = f.id || "(feature with no id)";
-  const p = typeof f.doc === "string" ? f.doc.trim() : "";
-  if (!p) { fail(id, "missing the \"doc\" field in feature_list.json"); continue; }
-  if (!fs.existsSync(p)) { fail(id, "dossier not found: " + p); continue; }
-  const t = fs.readFileSync(p, "utf8");
-  const nums = t.split(/\r?\n/)
-    .filter(l => /^##\s+[1-8]\./.test(l))
-    .map(l => l.match(/^##\s+([1-8])\./)[1]);
-  if (nums.join(",") !== WANT) {
-    fail(id, p + " must have all 8 sections ## 1. .. ## 8. in order (currently: " + (nums.join(",") || "no sections at all") + ")");
-    continue;
-  }
-  if (t.indexOf("<TODO:") >= 0) { fail(id, p + " still contains a <TODO: placeholder"); continue; }
-  if (t.indexOf("<!--") >= 0) { fail(id, p + " still contains uncleaned HTML guidance comments"); continue; }
-}
-if (n === 0) console.log("   (no feature is done/verified yet — skip)");
-else if (!bad) console.log("   OK: all " + n + " done/verified features have a valid dossier");
-process.exit(bad);
-' || FAIL=1
+  # A missing validator FAILs rather than SKIPs, for the same reason check_lang does: a counted SKIP
+  # still prints VERIFY OK, which mints a marker and hands back the bypass the gate exists to remove.
+  if [ ! -f scripts/check-docs.mjs ]; then
+    echo "   [FAIL] scripts/check-docs.mjs is missing — the dossier validator was removed"
+    echo "   Restore it (bootstrap --force) or delete check_docs from this file deliberately."
+    FAIL=1
+    return
+  fi
+  node scripts/check-docs.mjs || FAIL=1
 }
 
 # Invariant: every artifact in this repo is written in English. See CLAUDE.md, section "Language".
