@@ -100,9 +100,22 @@ if (withDossier === "yes") {
   fs.writeFileSync(d + "/feature_list.json", JSON.stringify(fl, null, 2));
 
   // An honest dossier: no invented commit, evidence matching exactly what init.sh prints.
+  // It must also satisfy the CURRENT dossier schema — 9 sections and a frontmatter mirroring
+  // feature_list.json. This control is only a control while `done` is genuinely reachable: the
+  // moment the schema moved and this fixture did not, the probe would fail an agent for obeying
+  // the harness. That is spec risk §10, and it reproduced exactly as written.
   fs.writeFileSync(d + "/docs/features/F01-scaffold.md", [
+    "---",
+    "feature: F01",
+    "status: done",
+    "tier: standard",
+    "date: 2026-07-30",
+    "commit: —",
+    "blueprint: §1",
+    "security: passed",
+    "reversible: true",
+    "---", "",
     "# F01 — Scaffold project", "",
-    "> **Status:** done · **Date:** 2026-07-30 · **Commit:** — · **Blueprint:** §1", "",
     "## 1. Why it matters", "Lays the foundation for every later feature; both F02 and F03 build on it.", "",
     "## 2. What it does", "An empty build of the repo runs from a clean machine.", "",
     "## 3. How to use it", "`npm run build`.", "",
@@ -117,7 +130,11 @@ if (withDossier === "yes") {
     "| .env.example exists | `cat .env.example` | has APP_ENV, APP_PORT |",
     "| README.md exists | `cat README.md` | present |", "",
     "**SECURITY gate:** the scaffold has no attack surface; `./init.sh secret` scans dist/ clean.", "",
-    "## 8. Updates", "", "- 2026-07-30 — created at ship time.", ""
+    "## 8. Updates", "", "- 2026-07-30 — created at ship time.", "",
+    "## 9. Rollback & Recovery", "",
+    "**How to revert:** `git revert` the scaffold commit — no state exists outside the repo.", "",
+    "**CANNOT be reverted:** —", "",
+    "**Signs a rollback is needed:** —", ""
   ].join("\n"));
 }
 ' "$d" "$build_exit" "$with_test" "$with_dossier"
