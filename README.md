@@ -186,9 +186,9 @@ tables and one HTML-entity table.
 
 **`scripts/lang-words.txt` — the project's own vocabulary.** This is the part that decides whether
 identifiers get caught. The shipped list was derived from one project, and the syllables most common in
-commercial code (`hang`, `don`, `ban`, `can`, `tong`) are *also English words*, so they can never sit in
-a shared list without lighting up every English repo using this harness. That trade-off belongs to each
-project, inside its own repo. Measured: `const tong_tien_don_hang = 0;` passes on the shipped list alone
+commercial code are *also English words*, so they can never sit in a shared list without lighting up
+every English repo using this harness. That trade-off belongs to each project, inside its own repo.
+Measured: a snake_case identifier built from three domain syllables passes on the shipped list alone,
 and is caught the moment the project declares those three words. The same file carries `!skip` for
 translation catalogues and fixtures, and `!file-threshold` for the character table that trips the file
 rule legitimately — harness-kit ships its own as a worked example, because a repo that tests a detector
@@ -197,7 +197,7 @@ has to contain what it detects.
 **It is still a screen, not a proof**, and the check says so in its own output. Vocabulary nobody
 declared still passes. The diacritic half is not perfectly silent either — on that corpus it flags 2
 lines, a Latin-1 accented-character table. Accented letters shared with French stay in the class
-anyway, because dropping them would blind it to words as common as `khong`.
+anyway, because dropping them would blind the check to some of the commonest words it exists to find.
 
 ## Four test tiers
 ```bash
