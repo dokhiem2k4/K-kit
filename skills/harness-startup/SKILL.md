@@ -1,57 +1,57 @@
 ---
 name: harness-startup
-description: Only in a project whose repo root has feature_list.json (a bootstrapped harness); never in any other repo. Use at the start of every session in a harness project, when resuming work, when the human says "continue"/"tiep tuc", or whenever you are unsure which feature is active - reads state files in a fixed order before any code is read or written
+description: Only in a project whose repo root has feature_list.json (a bootstrapped harness); never in any other repo. Use at the start of every session in a harness project, when resuming work, when the human says "continue"/"carry on"/"pick up where we left off", or whenever you are unsure which feature is active - reads state files in a fixed order before any code is read or written
 ---
 
 # Harness startup
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
-**Nguyen tac:** doc state truoc, doc code sau. Code khong noi cho ban biet feature nao dang active,
-`done_when` la gi, hay phien truoc dung o dau.
+**Principle:** read the state first, the code second. Code cannot tell you which feature is active,
+what `done_when` says, or where the previous session stopped.
 
-## Doc theo dung thu tu nay
+## Read in exactly this order
 
-Doc het 5 buoc roi moi cham vao code. Tao todo cho tung buoc.
+Finish all 5 steps before touching any code. Create one todo per step.
 
-1. **`progress.md`** — Current State + bang chung lan cuoi. Day la "dang o dau".
-2. **`session-handoff.md`** — Blockers, Files touched, Recommended Next Step. Day la "phien truoc dinh gi".
-3. **`feature_list.json`** — lay `active_feature`, doc `scope`, `done_when`, `verify`, `dependencies` cua no.
-4. **Blueprint** (duong dan o field `blueprint`) — doc dung muc lien quan feature dang active.
-5. **Dossier cua feature lien quan** — xem duoi.
+1. **`progress.md`** — Current State + the last evidence. This is "where things stand".
+2. **`session-handoff.md`** — Blockers, Files touched, Recommended Next Step. This is "what the last session intended".
+3. **`feature_list.json`** — take `active_feature`, read its `scope`, `done_when`, `verify`, `dependencies`.
+4. **The Blueprint** (path in the `blueprint` field) — read the section covering the active feature.
+5. **The dossier of any related feature** — see below.
 
-## Khi nao BAT BUOC doc dossier
+## When reading a dossier is MANDATORY
 
-Sap dung toi mot feature co status `done` hoac `verified`? Doc `docs/features/<ID>-<slug>.md`
-(duong dan o field `doc`) **truoc khi mo file code**:
+About to touch a feature with status `done` or `verified`? Read `docs/features/<ID>-<slug>.md`
+(path in the `doc` field) **before opening any code file**:
 
-- **Muc 4 (Ben trong)** — luong chinh + bang files touched. Tiet kiem ca phien do lai.
-- **Muc 6 (Cam bay khi sua)** — invariant phai giu, phu thuoc ngam. Day la thu se lam ban vo code neu khong doc.
+- **Section 4 (Under the hood)** — the main flow + the files-touched table. Saves a whole session of rediscovery.
+- **Section 6 (Pitfalls when editing)** — invariants to preserve, hidden dependencies. This is what breaks the code if you skip it.
 
-Bo qua buoc nay la ly do pho bien nhat khien mot feature dang chay bi lam hong boi feature ke tiep.
+Skipping this step is the most common reason a working feature gets broken by the next one.
 
-## Kiem tra truoc khi bat dau
+## Checks before starting
 
-- [ ] `dependencies` cua `active_feature` **deu** `done`/`verified`? Neu chua → khong duoc bat dau, bao Homeowner.
-- [ ] `done_when` co **testable** khong? Moi tieu chi phai tra loi duoc bang mot lenh hoac mot thao tac quan sat duoc. Neu khong → sua `done_when` truoc, dung code truoc.
-- [ ] Co blocker nao dang cho Homeowner trong `session-handoff.md`? Neu blocker chan feature nay → hoi, dung tu quyet.
-- [ ] Status hien tai cua `active_feature` la gi? `in_progress` nghia la co viec dang do — tim no trong `progress.md`, dung lam lai tu dau.
+- [ ] Are **all** the `dependencies` of `active_feature` `done`/`verified`? If not → do not start, tell the Homeowner.
+- [ ] Is `done_when` **testable**? Every criterion must be answerable by a command or an observable action. If not → fix `done_when` first, do not code first.
+- [ ] Is any blocker waiting on the Homeowner in `session-handoff.md`? If a blocker affects this feature → ask, do not decide alone.
+- [ ] What is the current status of `active_feature`? `in_progress` means work is already underway — find it in `progress.md`, do not start over.
 
-## Sau khi doc xong
+## After reading
 
-Noi lai cho Homeowner trong **3 dong**: dang o feature nao, `done_when` con thieu gi, buoc ke tiep la gi.
-Roi invoke `harness-kit:building-a-feature`.
+Report back to the Homeowner in **3 lines**: which feature you are on, what `done_when` is still missing, what the next step is.
+Then invoke `harness-kit:building-a-feature`.
 
 ## Red flags
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Toi doc code nhanh hon doc state" | Code khong chua `done_when`. Ban se build sai tieu chi. |
-| "Phien truoc la toi, toi nho ma" | Context da bi compact. `progress.md` nho, ban thi khong. |
-| "Feature nay don gian, khoi doc dossier" | Muc 6 ton tai chinh vi no khong don gian. |
-| "Doc 5 file ton token qua" | Re hon build sai roi lam lai. |
-| "`done_when` mo ho nhung toi hieu y" | Ban hieu y ≠ verify duoc. Sua `done_when`. |
+| "Reading code is faster than reading state" | Code does not contain `done_when`. You will build against the wrong criteria. |
+| "The last session was me, I remember" | The context was compacted. `progress.md` remembers; you do not. |
+| "This feature is simple, skip the dossier" | Section 6 exists precisely because it is not simple. |
+| "Reading 5 files costs too many tokens" | Cheaper than building the wrong thing and redoing it. |
+| "`done_when` is vague but I get the idea" | Getting the idea ≠ being able to verify. Fix `done_when`. |

@@ -6,105 +6,105 @@ description: Only in a project whose repo root has feature_list.json (a bootstra
 # Verifying a feature
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
-**Nguyen tac:** bang chung truoc, tuyen bo sau. Luon luon.
+**Principle:** evidence first, claims second. Always.
 
 ```
-KHONG TUYEN BO XONG MA KHONG CO EXIT CODE CHAY TRONG LUOT NAY
+NEVER CLAIM DONE WITHOUT AN EXIT CODE FROM THIS TURN
 ```
 
-## Ham gate — chay truoc moi tuyen bo
+## The gate function — run it before every claim
 
 ```
-1. XAC DINH: lenh nao chung minh dieu nay?  (lay tu field `verify` cua feature)
-2. CHAY:     chay DAY DU lenh do, moi, khong dung ket qua cu
-3. DOC:      doc het output, xem exit code, dem so failure
-4. DOI CHIEU: output co xac nhan dung dieu ban sap noi khong?
-   - KHONG → bao trang thai THAT kem output
-   - CO    → tuyen bo KEM output lam bang chung
-5. CHI KHI DO moi duoc noi "xong"
+1. IDENTIFY: which command proves this?  (take it from the feature's `verify` field)
+2. RUN:      run that command IN FULL, fresh, never reuse an old result
+3. READ:     read all the output, check the exit code, count the failures
+4. COMPARE:  does the output actually confirm what you are about to say?
+   - NO  → report the REAL state along with the output
+   - YES → make the claim WITH the output as evidence
+5. ONLY THEN may you say "done"
 ```
 
-Bo bat ky buoc nao = noi doi, khong phai verify.
+Skipping any step is lying, not verifying.
 
-## Buoc 1 — bang chung co hoc
+## Step 1 — mechanical evidence
 
-Chay `./init.sh` phan lien quan (thuong la `all`). **Dan nguyen output vao `progress.md`**,
-khong tom tat. Exit code khac 0 → chua xong, quay lai BUILD.
+Run the relevant part of `./init.sh` (usually `all`). **Paste the raw output into `progress.md`**,
+do not summarize. A non-zero exit code → not done, go back to BUILD.
 
-Neu `init.sh` in SKIP hoac "(no ... script)" cho mot check ma feature nay CAN — do khong phai pass.
-Do la check khong chay. Sua `init.sh` hoac chay tay va dan output.
+If `init.sh` prints SKIP or "(no ... script)" for a check this feature NEEDS — that is not a pass.
+That is a check that did not run. Fix `init.sh`, or run it by hand and paste the output.
 
-## Buoc 2 — refute pass doi khang
+## Step 2 — the adversarial refute pass
 
-Self-review mot chieu bo sot loi mot cach he thong: ban di tim ly do de tin la minh dung.
-Refute pass dao nguoc: di tim mot dau vao lam no sai.
+One-directional self-review misses bugs systematically: you go looking for reasons to believe you are right.
+The refute pass inverts that: go looking for an input that makes it wrong.
 
-Co opt-in `Workflow` → dung saved workflow `adversarial-verify`:
+If `Workflow` is opted in → use the saved workflow `adversarial-verify`:
 
 ```
 Workflow({ name:'adversarial-verify', args:{
   featureId:'F0X',
   criteria:[ ...done_when... ],
-  securityChecks:[ ...tu security.md... ]
+  securityChecks:[ ...from security.md... ]
 }})
 ```
 
-Khong opt-in → spawn `Agent` (Explore) thu cong voi cung tinh than: **mac dinh la REFUTED
-tru khi khang dinh duoc dieu nguoc lai**. Voi moi `done_when`, di tim mot trong nhung thu nay:
+Not opted in → spawn an `Agent` (Explore) by hand in the same spirit: **default to REFUTED
+unless you can positively establish the opposite**. For each `done_when`, go hunting for one of these:
 
-- input rong / sai dinh dang / qua dai
-- data cua user khac
-- thieu token, token het han, token cua user khac
-- cache cu hoac khong co cache
-- CORS de dai, secret lot vao client bundle
-- input chua tin cay cham toi sink (SQL / shell / prompt LLM)
-- race giua 2 request
-- **code don gian la chua duoc build**
+- empty / malformed / oversized input
+- another user's data
+- a missing token, an expired token, another user's token
+- a stale cache, or no cache at all
+- lax CORS, a secret leaking into the client bundle
+- untrusted input reaching a sink (SQL / shell / LLM prompt)
+- a race between two requests
+- **the code simply having never been built**
 
-`confirmedFailures` >= 1 → **chua done**, quay lai BUILD.
+`confirmedFailures` >= 1 → **not done**, go back to BUILD.
 
-## Buoc 3 — truy vet yeu cau
+## Step 3 — requirement traceability
 
-Moi REQ trong Blueprint thuoc pham vi feature nay da map toi thu gi do trong code chua?
-Thieu → ghi Open Question, khong lang lang bo qua.
+Has every Blueprint REQ within this feature's scope been mapped to something in the code?
+Missing one → record an Open Question, do not quietly move on.
 
-## Vong fix co gioi han — dung xoay vong
+## A bounded fix loop — do not spin
 
-Verify truot thi dem vong. Khong duoc lap vo han.
+When verify fails, count the loops. Never repeat unbounded.
 
-| Vong | Lam gi |
+| Loop | What to do |
 |---|---|
-| 1–2 | Sua truc tiep, chay lai buoc 1 + 2 |
-| 3 | **Dung sua.** Viet ra: gia thiet nao cua ban sai? Chua tra loi duoc → `harness-kit:debugging-a-feature` truoc khi sua tiep |
-| 4 | Spawn subagent moi (context sach) doc lai feature tu dau — context cua ban da nhiem gia thiet sai |
-| 5 | **BREAKER.** Dung. Voi tung finding con lai: no co load-bearing khong? |
-| | · Co finding load-bearing → bao **BLOCKED** cho Homeowner, khong ship |
-| | · Khong → ghi tung finding + ly do bo qua vao `progress.md`, xin Homeowner duyet |
+| 1–2 | Fix directly, re-run steps 1 + 2 |
+| 3 | **Stop fixing.** Write down: which of your assumptions is wrong? Cannot answer → `harness-kit:debugging-a-feature` before fixing anything else |
+| 4 | Spawn a fresh subagent (clean context) to re-read the feature from scratch — your context is contaminated with a wrong assumption |
+| 5 | **BREAKER.** Stop. For each remaining finding: is it load-bearing? |
+| | · Any load-bearing finding → report **BLOCKED** to the Homeowner, do not ship |
+| | · Otherwise → record each finding + the reason for waiving it in `progress.md`, ask the Homeowner to approve |
 
-Sang vong 6 ma khong escalate la loi cua ban, khong phai cua code.
+Reaching loop 6 without escalating is your fault, not the code's.
 
-## Chi khi ca 3 buoc xanh
+## Only when all 3 steps are green
 
-Cap nhat `feature_list.json` status → `done`, kem bang chung trong `progress.md`.
-Roi invoke `harness-kit:security-gate`.
+Update `feature_list.json` status → `done`, with the evidence in `progress.md`.
+Then invoke `harness-kit:security-gate`.
 
-`verified` la bac khac: chi Homeowner chay qua flow that moi duoc dat. Ban khong tu dat `verified`.
+`verified` is a different tier: only the Homeowner sets it, after running the real flow. You never set `verified` yourself.
 
 ## Red flags
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Build xanh luc nay chac van xanh" | Chay lai. Ban vua sua code. |
-| "Test pass roi, khoi refute" | Test kiem thu ban nghi toi. Refute tim thu ban khong nghi toi. |
-| "Subagent bao OK" | Kiem tra doc lap. Bao cao cua agent khong phai bang chung. |
-| "Linter xanh nghia la build duoc" | Linter khong compile. Chay build. |
-| "`init.sh` in SKIP, coi nhu pass" | SKIP = khong chay. Khong phai pass. |
-| "Tom tat output cho gon" | Dan nguyen van. Tom tat la cho ban giau con so. |
-| "Toi tu tin no dung" | Tu tin ≠ bang chung. |
-| "Vong thu 5 roi nhung sap duoc" | Breaker da nhay. Escalate. |
-| "Lan nay ngoai le thoi" | Khong co ngoai le. |
+| "The build was green earlier, it still is" | Run it again. You just changed the code. |
+| "Tests pass, skip the refute pass" | Tests check what you thought of. Refute finds what you did not. |
+| "The subagent said OK" | Check independently. An agent's report is not evidence. |
+| "A green linter means it builds" | A linter does not compile. Run the build. |
+| "`init.sh` printed SKIP, treat it as a pass" | SKIP = did not run. Not a pass. |
+| "Summarize the output to keep it short" | Paste it verbatim. Summarizing is where you hide the numbers. |
+| "I am confident it is right" | Confidence ≠ evidence. |
+| "Loop 5 already, but I am nearly there" | The breaker has tripped. Escalate. |
+| "Just this once as an exception" | There are no exceptions. |

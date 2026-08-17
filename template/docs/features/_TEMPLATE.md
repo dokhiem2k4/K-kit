@@ -1,64 +1,64 @@
-# <TODO: F0X> — <TODO: Tên feature>
+# <TODO: F0X> — <TODO: Feature name>
 
-> **Status:** <TODO: done | verified> · **Ngày:** <TODO: YYYY-MM-DD> · **Commit:** <TODO: sha> · **Blueprint:** <TODO: mục>
+> **Status:** <TODO: done | verified> · **Date:** <TODO: YYYY-MM-DD> · **Commit:** <TODO: sha> · **Blueprint:** <TODO: section>
 
 <!--
-FEATURE DOSSIER — copy file này thành docs/features/<ID>-<slug>.md khi ship một feature.
+FEATURE DOSSIER — copy this file to docs/features/<ID>-<slug>.md when you ship a feature.
 
-Luật:
-- Viết tại SHIP gate, sau khi VERIFY + SECURITY + DEVEX đã pass.
-- Giữ đủ 8 heading dưới đây, đúng thứ tự, đúng chữ. Mục không áp dụng thì ghi "—", KHÔNG xoá heading.
-- Xoá hết placeholder <TODO: ...> và toàn bộ chú thích hướng dẫn trước khi ship.
-- ./init.sh docs sẽ FAIL nếu thiếu mục, sai thứ tự, hoặc còn sót placeholder / chú thích.
+Rules:
+- Write it at the SHIP gate, after VERIFY + SECURITY + DEVEX have passed.
+- Keep all 8 headings below, in order, worded exactly. A section that does not apply gets "—", NEVER delete the heading.
+- Remove every <TODO: ...> placeholder and every guidance comment before shipping.
+- ./init.sh docs will FAIL on a missing section, a wrong order, or a leftover placeholder / comment.
 
-Ranh giới mục 1 và mục 2 — đừng viết trùng:
-- Mục 1 = zoom out. Vai trò của feature trong hệ thống. Vì sao dự án CẦN nó.
-- Mục 2 = zoom in. Hành vi quan sát được. Bấm/gọi gì thì ra gì.
+The boundary between sections 1 and 2 — do not write it twice:
+- Section 1 = zoom out. The feature's role in the system. Why the project NEEDS it.
+- Section 2 = zoom in. Observable behaviour. Press/call what, get what.
 -->
 
-## 1. Ý nghĩa với dự án
+## 1. Why it matters
 
-<TODO: F này đóng vai trò gì trong bức tranh chung? Nó unlock được gì (feature nào dựa vào nó — xem
-`dependencies` trong feature_list.json, cả chiều xuôi lẫn chiều ngược)? Không có nó thì dự án thiếu gì?
-Cover REQ / mục nào của Blueprint?>
+<TODO: What role does this F play in the bigger picture? What does it unlock (which features build on it —
+check `dependencies` in feature_list.json, in both directions)? What would the project lack without it?
+Which REQ / Blueprint section does it cover?>
 
-## 2. Làm được gì
+## 2. What it does
 
-<TODO: Hành vi quan sát được, cụ thể. Người dùng bấm gì / gọi gì thì nhận lại gì.>
+<TODO: Observable behaviour, concretely. What the user presses or calls, and what comes back.>
 
-## 3. Cách dùng
+## 3. How to use it
 
-<TODO: Bước cụ thể, endpoint, màn hình, hoặc lệnh. Kèm ví dụ thật — request → response nếu là API.>
+<TODO: Concrete steps, endpoint, screen, or command. With a real example — request → response if it is an API.>
 
-## 4. Bên trong
+## 4. Under the hood
 
-<TODO: Luồng chính A → B → C.>
+<TODO: The main flow A → B → C.>
 
 **Files touched**
 
-| File | Vai trò |
+| File | Role |
 |---|---|
-| `<TODO: path>` | <TODO: 1 dòng> |
+| `<TODO: path>` | <TODO: one line> |
 
-**Data / config:** <TODO: bảng, schema, biến env cần thiết — hoặc "—">
+**Data / config:** <TODO: tables, schema, env vars needed — or "—">
 
-## 5. Quyết định & trade-off
+## 5. Decisions & trade-offs
 
-<TODO: Chọn gì, bỏ gì, vì sao. Cái gì CỐ Ý không làm (out of scope) để người sau khỏi tưởng là thiếu sót.>
+<TODO: What was chosen, what was dropped, why. What was DELIBERATELY not done (out of scope), so nobody later mistakes it for an oversight.>
 
-## 6. Cạm bẫy khi sửa
+## 6. Pitfalls when editing
 
-<TODO: Chỗ dễ vỡ, invariant phải giữ, phụ thuộc ngầm. Ai sửa file này cần biết gì trước.>
+<TODO: What breaks easily, invariants to preserve, hidden dependencies. What anyone editing this file needs to know first.>
 
-## 7. Bằng chứng
+## 7. Evidence
 
-| `done_when` | Cách verify | Kết quả |
+| `done_when` | How verified | Result |
 |---|---|---|
-| <TODO: tiêu chí> | <TODO: lệnh / thao tác> | <TODO: pass + tóm tắt> |
+| <TODO: criterion> | <TODO: command / action> | <TODO: pass + summary> |
 
-**SECURITY gate:** <TODO: kết quả checklist security.md áp dụng>
-Output đầy đủ nằm ở `progress.md`; ở đây chỉ tóm tắt.
+**SECURITY gate:** <TODO: the result of the applicable security.md checklist>
+The full output lives in `progress.md`; this is only a summary.
 
-## 8. Cập nhật
+## 8. Updates
 
-- <TODO: YYYY-MM-DD> — tạo mới khi ship.
+- <TODO: YYYY-MM-DD> — created at ship time.

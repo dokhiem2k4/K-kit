@@ -1,6 +1,6 @@
 {
   "name": "k-kit",
-  "description": "Marketplace cho harness-kit — harness dieu phoi coding-agent theo feature state, gate co hoc, va verify-gate chan bia.",
+  "description": "Marketplace for harness-kit — a harness that governs coding agents through feature state, machine-enforced gates, and a verify-gate that blocks fabrication.",
   "owner": {
     "name": "dokhiem2k4"
   },

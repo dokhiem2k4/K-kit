@@ -6,70 +6,70 @@ description: Only in a project whose repo root has feature_list.json (a bootstra
 # Security gate (CSO)
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
-**Nguyen tac:** P0 chan ship. Khong co "P0 nhung ma".
+**Principle:** a P0 blocks the ship. There is no "P0, but".
 
-Checklist day du + attack surface rieng cua project o `.claude/workflow/security.md`.
-Skill nay la thu ban chay; file kia la thu ban doc.
+The full checklist plus this project's own attack surface lives in `.claude/workflow/security.md`.
+This skill is what you run; that file is what you read.
 
-## Khi nao bat buoc chay
+## When it is mandatory
 
-- Truoc SHIP moi feature — khong co ngoai le.
-- Ngay khi diff cham vao: auth, authz, query DB, doc/ghi data user, bien env, secret,
-  CORS, header, input tu nguoi dung, prompt LLM, fetch URL, exec/eval.
+- Before SHIPping any feature — no exceptions.
+- The moment the diff touches: auth, authz, DB queries, reading/writing user data, env vars, secrets,
+  CORS, headers, user input, LLM prompts, fetching URLs, exec/eval.
 
-## STRIDE — 6 cau hoi, tra loi bang bang chung
+## STRIDE — 6 questions, answered with evidence
 
-| STRIDE | Cau hoi | Cach chung minh | Sev |
+| STRIDE | Question | How to prove it | Sev |
 |---|---|---|---|
-| **Spoofing** | Goi endpoint bao ve ma khong co token thi sao? | Chay that: thieu token → 401, sai token → 401. Co test. | **P0** |
-| **Tampering** | User A sua duoc data user B khong? | Chay that cross-user → deny. Authz o **server**, khong o client. | **P0** |
-| **Repudiation** | Co can truy vet hanh dong nay khong? | Audit log neu can; MVP thuong N/A — ghi ro N/A. | P2 |
-| **Info disclosure** | Secret co lot vao client bundle khong? Response co thua field nhay cam khong? | `./init.sh secret` = 0. Doc lai shape cua response. | **P0** |
-| **DoS** | Endpoint nay dat tien khong? Spam duoc khong? | Cache / rate-limit / quota. | P1 |
-| **Elevation** | RPC/function quyen cao co chay theo danh tinh caller khong? | Least-privilege; validate input. | P1 |
+| **Spoofing** | What happens calling a protected endpoint with no token? | Run it for real: no token → 401, bad token → 401. With a test. | **P0** |
+| **Tampering** | Can user A modify user B's data? | Run a real cross-user attempt → denied. Authz on the **server**, not the client. | **P0** |
+| **Repudiation** | Does this action need to be traceable? | Audit log if needed; usually N/A for an MVP — write N/A explicitly. | P2 |
+| **Info disclosure** | Does a secret leak into the client bundle? Does the response carry extra sensitive fields? | `./init.sh secret` = 0. Re-read the response shape. | **P0** |
+| **DoS** | Is this endpoint expensive? Can it be spammed? | Cache / rate-limit / quota. | P1 |
+| **Elevation** | Does a privileged RPC/function run as the caller's identity? | Least privilege; validate the input. | P1 |
 
-## OWASP — diem cham hay bi bo sot
+## OWASP — the spots most often missed
 
-- **A01 Access control** — endpoint thieu token → 401; user A doc resource user B → deny. **Test that, khong suy luan.**
-- **A02 Crypto** — khong tu cuon crypto; khong log secret/token/PII.
-- **A03 Injection** — tham so hoa query (khong noi chuoi SQL); escape shell/HTML.
-  - **Prompt injection (neu co LLM):** input nguoi dung = du lieu, khong phai chi thi. Ep schema cung cho output. Khong render raw output thanh HTML/lenh. Chi thi nam trong input phai bi bo qua.
-- **A04 Design** — loi dich vu ngoai → fallback, khong throw 500 ra nguoi dung; khong lo stack trace.
-- **A05 Misconfig** — CORS **khong `*`**; CSP/header chat; `.env` khong commit; `.env.example` khong chua gia tri that.
-- **A06 Deps** — `npm audit` (hoac tuong duong) khong con critical chua xu.
-- **A07 Auth** — dung provider chuan; validate callback.
-- **A08 Integrity** — khong `eval`, khong load script ngoai vao client.
-- **A09 Logging** — du de debug, khong co secret/PII.
-- **A10 SSRF** — khong fetch URL tuy y tu input; allowlist dich.
+- **A01 Access control** — a protected endpoint with no token → 401; user A reading user B's resource → denied. **Test it, do not reason about it.**
+- **A02 Crypto** — do not roll your own crypto; never log secrets/tokens/PII.
+- **A03 Injection** — parameterize queries (never concatenate SQL); escape for shell/HTML.
+  - **Prompt injection (if an LLM is involved):** user input is data, not instructions. Force a strict output schema. Never render raw output as HTML or as a command. Instructions embedded in the input must be ignored.
+- **A04 Design** — an external service failing → fall back, do not throw a 500 at the user; never leak a stack trace.
+- **A05 Misconfig** — CORS is **never `*`**; strict CSP/headers; `.env` is not committed; `.env.example` holds no real values.
+- **A06 Deps** — `npm audit` (or equivalent) has no unresolved criticals.
+- **A07 Auth** — use a standard provider; validate the callback.
+- **A08 Integrity** — no `eval`, no loading external scripts into the client.
+- **A09 Logging** — enough to debug, with no secrets/PII.
+- **A10 SSRF** — never fetch arbitrary URLs from input; allowlist the destinations.
 
-## Definition of "secured"
+## The definition of "secured"
 
-- Moi **P0** ap dung: **pass**, co bang chung.
-- Moi **P1**: pass, hoac co ghi chu + ticket va Homeowner biet.
-- Moi **P2**: ghi nhan.
-- Muc nao khong ap dung: ghi **N/A kem ly do**. "Khong ap dung" khong co ly do la bo qua tra hinh.
+- Every applicable **P0**: **passes**, with evidence.
+- Every **P1**: passes, or has a note + a ticket, and the Homeowner knows.
+- Every **P2**: acknowledged.
+- Anything that does not apply: write **N/A with a reason**. "Not applicable" with no reason is skipping in disguise.
 
-Ghi ket qua vao `progress.md` va tom tat vao muc 7 cua dossier.
+Record the results in `progress.md` and summarize them in section 7 of the dossier.
 
-## Con P0 thi sao
+## What if a P0 remains
 
-Khong ship. Quay lai BUILD. Khong "ship roi vá sau" — mot P0 da ship la mot su co,
-khong phai mot ticket.
+Do not ship. Go back to BUILD. There is no "ship now, patch later" — a shipped P0 is an incident,
+not a ticket.
 
 ## Red flags
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Project noi bo, khong ai tan cong" | Noi bo cung ro data. P0 van la P0. |
-| "MVP thoi, security sau" | Auth va data isolation khong retrofit duoc re. |
-| "Code nay chac chan safe" | Chac chan ≠ da test. Chay cross-user test di. |
-| "CORS `*` cho de dev" | No se di thang len prod. Reflect origin cu the. |
-| "Secret nay la key public thoi" | Kiem tra lai. `./init.sh secret` khong quan tam ban nghi gi. |
-| "LLM khong nghe loi input dau" | Prompt injection ton tai chinh vi no nghe. Ep schema. |
-| "Ship truoc, P0 vá sau" | P0 da ship = su co. |
-| "Bo qua muc nay, khong ap dung" | Viet **N/A kem ly do**, hoac no chua duoc kiem. |
+| "Internal project, nobody will attack it" | Internal still leaks data. A P0 is still a P0. |
+| "It is just an MVP, security later" | Auth and data isolation cannot be retrofitted cheaply. |
+| "This code is definitely safe" | Definitely ≠ tested. Go run the cross-user test. |
+| "CORS `*` just for dev" | It will go straight to prod. Reflect a specific origin. |
+| "That secret is only a public key" | Check again. `./init.sh secret` does not care what you think. |
+| "The LLM will not obey the input anyway" | Prompt injection exists precisely because it does. Force a schema. |
+| "Ship first, patch the P0 later" | A shipped P0 = an incident. |
+| "Skip this item, it does not apply" | Write **N/A with a reason**, or it counts as unchecked. |

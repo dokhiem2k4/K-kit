@@ -1,8 +1,8 @@
-// verify-gate.js — phan logic cua hook. Doc JSON su kien tren stdin, in quyet dinh ra stdout.
-// Duoc goi boi hooks/verify-gate: node verify-gate.js <mode> <marker-dir> < event.json
+// verify-gate.js — the logic half of the hook. Reads the event JSON on stdin, prints its
+// decision to stdout. Invoked by hooks/verify-gate: node verify-gate.js <mode> <marker-dir> < event.json
 //
-// Tach ra file rieng vi mot ly do cu the: neu nhung script nay vao heredoc trong bash thi
-// heredoc chiem mat stdin, va node khong con doc duoc JSON su kien nua.
+// Kept in its own file for one specific reason: if this script lived in a bash heredoc,
+// the heredoc would take over stdin and node could no longer read the event JSON.
 const fs = require("fs");
 const path = require("path");
 const [mode, markerDir] = process.argv.slice(2);
@@ -16,28 +16,28 @@ const toolInput = inp.tool_input || {};
 const filePath = String(toolInput.file_path || "");
 const base = path.basename(filePath);
 
-// File STATE, khong phai code. Sua chung khong lam mot lan verify cu thanh vo nghia.
+// STATE files, not code. Editing them does not invalidate an earlier verify run.
 const STATE_FILES = new Set(["feature_list.json", "progress.md", "session-handoff.md", "CLAUDE.md"]);
 const isStateFile = STATE_FILES.has(base) || /(^|\/)docs\//.test(filePath);
 
-// Chuoi "VERIFY OK" la HOP DONG giua init.sh va gate nay. Gate khong co cach nao khac
-// de biet mot lan verify da thanh cong. Neu init.sh khong con in chuoi do, marker khong
-// bao gio duoc dat, va gate am tham chuyen tu fail-open thanh fail-closed: chan sach moi
-// thao tac ghi done ma khong ai hieu tai sao.
+// The string "VERIFY OK" is the CONTRACT between init.sh and this gate. The gate has no
+// other way to know a verify run succeeded. If init.sh stops printing it, the marker is
+// never set, and the gate silently flips from fail-open to fail-closed: it blocks every
+// write of done with nobody understanding why.
 //
-// Nen truoc khi TU CHOI, gate phai tu kiem: du an nay co init.sh khong, va init.sh do co
-// kha nang in "VERIFY OK" khong. Khong co kha nang do -> gate khong co quyen tu choi.
+// So before it REFUSES, the gate must check itself: does this project have an init.sh, and
+// can that init.sh print "VERIFY OK"? Without that ability the gate has no right to refuse.
 const CONTRACT = "VERIFY OK";
 function contractHolds(projectDir) {
   const p = path.join(projectDir, "init.sh");
   try {
-    if (!fs.existsSync(p)) return { ok: false, why: "khong tim thay " + p };
+    if (!fs.existsSync(p)) return { ok: false, why: "not found: " + p };
     if (!fs.readFileSync(p, "utf8").includes(CONTRACT)) {
-      return { ok: false, why: p + " khong in chuoi \"" + CONTRACT + "\" — hop dong voi verify-gate da vo" };
+      return { ok: false, why: p + " never prints \"" + CONTRACT + "\" — the contract with verify-gate is broken" };
     }
     return { ok: true };
   } catch (e) {
-    return { ok: false, why: "khong doc duoc " + p + ": " + e.message };
+    return { ok: false, why: "cannot read " + p + ": " + e.message };
   }
 }
 
@@ -46,20 +46,20 @@ if (mode === "post-bash") {
   const r = inp.tool_response;
   const text = typeof r === "string" ? r : JSON.stringify(r || "");
 
-  // Chay init.sh ma output khong co ca VERIFY OK lan VERIFY FAILED = hop dong da vo.
-  // Canh bao ngay tai day, khong doi den luc gate chan nham roi moi phat hien.
+  // Running init.sh with neither VERIFY OK nor VERIFY FAILED in the output = broken contract.
+  // Warn right here, rather than waiting until the gate blocks the wrong thing.
   const cmd = String((inp.tool_input || {}).command || "");
   if (/init\.sh/.test(cmd) && !/VERIFY (OK|FAILED)/.test(text)) {
     process.stderr.write(
-      "harness-kit verify-gate: da chay `" + cmd.slice(0, 80) + "` nhung output khong co " +
-      "\"VERIFY OK\" hay \"VERIFY FAILED\".\ninit.sh phai in mot trong hai chuoi do — gate dua vao " +
-      "chung de biet verify da chay va ket qua ra sao. Khong co chung thi gate khong bao ve duoc gi.\n"
+      "harness-kit verify-gate: ran `" + cmd.slice(0, 80) + "` but the output contains neither " +
+      "\"VERIFY OK\" nor \"VERIFY FAILED\".\ninit.sh must print one of those two strings — the gate relies on " +
+      "them to know that verify ran and how it went. Without them the gate protects nothing.\n"
     );
   }
 
-  // VERIFY FAILED phai HUY marker: mot lan chay do sau mot lan chay xanh nghia la
-  // trang thai hien tai khong xanh. Neu chi set ma khong huy, agent chay xanh mot lan
-  // roi lam vo moi thu van con marker.
+  // VERIFY FAILED must CLEAR the marker: a red run after a green one means the current
+  // state is not green. If we only set and never cleared, an agent could go green once,
+  // then break everything and still hold the marker.
   if (/VERIFY FAILED/.test(text)) { try { fs.unlinkSync(marker); } catch {} process.exit(0); }
   if (/VERIFY OK/.test(text)) {
     try { fs.writeFileSync(marker, JSON.stringify({ at: new Date().toISOString(), cwd: inp.cwd || "" })); } catch {}
@@ -69,8 +69,8 @@ if (mode === "post-bash") {
 
 // ---------------------------------------------------------------- post-edit
 if (mode === "post-edit") {
-  // Code vua doi -> lan VERIFY OK truoc do khong con chung minh gi ve code hien tai.
-  // Day la thu chan duong lach: "chay verify xanh truoc, sua code sau, roi danh done".
+  // The code just changed -> the earlier VERIFY OK proves nothing about the current code.
+  // This is what closes the loophole: "run verify green first, edit code after, then mark done".
   if (filePath && !isStateFile) { try { fs.unlinkSync(marker); } catch {} }
   process.exit(0);
 }
@@ -79,7 +79,7 @@ if (mode === "post-edit") {
 if (mode !== "pre-edit") process.exit(0);
 if (base !== "feature_list.json") process.exit(0);
 
-// Gom moi doan text SAP duoc ghi vao file.
+// Collect every chunk of text ABOUT TO BE written to the file.
 const incoming = [];
 if (typeof toolInput.content === "string") incoming.push(toolInput.content);
 if (typeof toolInput.new_string === "string") incoming.push(toolInput.new_string);
@@ -90,49 +90,49 @@ const DONE = /"status"\s*:\s*"(done|verified)"/;
 const addsDone = incoming.some((t) => DONE.test(t)) && !DONE.test(outgoing);
 if (!addsDone) process.exit(0);
 
-// Voi Write (ghi de ca file): chi chan neu SO feature done TANG so voi tren dia.
-// Ghi lai nguyen trang thai cu (vi du sau khi format lai JSON) khong phai tuyen bo moi.
+// For Write (whole-file overwrite): only block if the NUMBER of done features GREW versus
+// what is on disk. Rewriting the same state (after reformatting the JSON, say) is not a new claim.
 if (typeof toolInput.content === "string") {
   const count = (obj) => (obj.features || []).filter((f) => ["done", "verified"].includes(f.status)).length;
   try {
     const before = count(JSON.parse(fs.readFileSync(filePath, "utf8")));
     const after = count(JSON.parse(toolInput.content));
     if (after <= before) process.exit(0);
-  } catch { /* khong doc/parse duoc -> kiem tiep, khong cho qua */ }
+  } catch { /* unreadable/unparseable -> keep checking, do not let it through */ }
 }
 
 let hasMarker = false;
 try { hasMarker = fs.existsSync(marker); } catch {}
 if (hasMarker) process.exit(0);
 
-// Sap tu choi. Kiem hop dong TRUOC DA: neu du an khong co init.sh, hoac init.sh khong
-// the in "VERIFY OK", thi khong ton tai duong nao de agent thoa man gate nay. Tu choi
-// luc do khong phai la gate — la khoa cung.
-// feature_list.json nam o repo root theo quy uoc, nen dirname cua no chinh la project dir.
+// About to refuse. CHECK THE CONTRACT FIRST: if the project has no init.sh, or that init.sh
+// cannot print "VERIFY OK", then no path exists for the agent to satisfy this gate. Refusing
+// at that point is not a gate — it is a hard lock.
+// feature_list.json lives at the repo root by convention, so its dirname is the project dir.
 const projectDir = path.dirname(path.resolve(filePath));
 const contract = contractHolds(projectDir);
 if (!contract.ok) {
   process.stderr.write(
-    "harness-kit verify-gate: CHO QUA thay vi chan, vi khong co duong nao de verify.\n" +
-    "Ly do: " + contract.why + "\n" +
-    "Gate chi chan duoc khi init.sh in \"" + CONTRACT + "\" luc thanh cong. " +
-    "Sua init.sh (hoac chay verify bang tay va dan output) roi gate se hoat dong lai.\n"
+    "harness-kit verify-gate: LETTING THROUGH instead of blocking, because there is no way to verify.\n" +
+    "Reason: " + contract.why + "\n" +
+    "The gate can only block when init.sh prints \"" + CONTRACT + "\" on success. " +
+    "Fix init.sh (or run verify by hand and paste the output) and the gate will work again.\n"
   );
   process.exit(0);
 }
 
 const reason =
-  "CHAN boi harness-kit verify-gate.\n\n" +
-  "Ban dang ghi status done/verified vao feature_list.json, nhung trong phien nay CHUA co " +
-  "lan chay nao cua ./init.sh tra ve VERIFY OK — hoac da co, nhung sau do code bi sua nen " +
-  "ket qua do khong con chung minh gi.\n\n" +
-  "Bang chung truoc, tuyen bo sau:\n" +
-  "  1. chay ./init.sh (phan lien quan trong field `verify` cua feature)\n" +
-  "  2. doc output, xac nhan VERIFY OK\n" +
-  "  3. dan output vao progress.md\n" +
-  "  4. roi moi ghi status\n\n" +
-  "Neu init.sh bao con check bi SKIP: do la check KHONG CHAY, khong phai pass.\n" +
-  "Xem skill harness-kit:verifying-a-feature.";
+  "BLOCKED by harness-kit verify-gate.\n\n" +
+  "You are writing status done/verified into feature_list.json, but in this session there has " +
+  "been NO run of ./init.sh returning VERIFY OK — or there was one, but code was edited afterwards " +
+  "so that result no longer proves anything.\n\n" +
+  "Evidence first, claims second:\n" +
+  "  1. run ./init.sh (the part named in the feature's `verify` field)\n" +
+  "  2. read the output, confirm VERIFY OK\n" +
+  "  3. paste the output into progress.md\n" +
+  "  4. only then write the status\n\n" +
+  "If init.sh reports that checks were SKIPped: those are checks that DID NOT RUN, not passes.\n" +
+  "See skill harness-kit:verifying-a-feature.";
 
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {

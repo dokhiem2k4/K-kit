@@ -1,69 +1,69 @@
-# Pipeline mở rộng — {{PROJECT_NAME}} (vibecode-kit + gaps)
+# Extended pipeline — {{PROJECT_NAME}} (vibecode-kit + gaps)
 
-Nền là 8 bước vibecode-kit. Bổ sung phần vibecode-kit thiếu (đối chiếu gstack):
+The base is the 8-step vibecode-kit. What vibecode-kit lacks is added on top (measured against gstack):
 **adversarial VERIFY, SECURITY gate, DevEx review, SHIP, MONITOR, Diataxis docs, guardrails, memory**.
 
 ```
-SCAN → RRI → VISION → BLUEPRINT ─┐  (design đã duyệt)
+SCAN → RRI → VISION → BLUEPRINT ─┐  (design approved)
                                   ▼
    BUILD(6) → VERIFY(7) → SECURITY(7.5) → DEVEX(7.6) → REFINE(8) → SHIP(9) → MONITOR(10)
      │guardrails   │adversarial   │STRIDE/OWASP   │TTHW      │        │gate   │post-deploy
 ```
 
-Với mỗi feature trong `feature_list.json`, đi qua BUILD→...→SHIP rồi mới sang feature kế.
+For each feature in `feature_list.json`, go through BUILD→...→SHIP before moving to the next one.
 
 ---
 
-## 6. BUILD — với guardrails
-- Implement đúng `scope` + `done_when`. KHÔNG thêm ngoài scope. Xung đột spec → escalate L2/L3.
-- **Live testing:** phần chạy được phải được *chạy thật* (curl endpoint, mở app, build ra artifact) — không chỉ đọc code.
-- **`/freeze`:** khi sửa bug, chỉ sửa file thuộc feature đang làm.
-- **`/careful`:** lệnh phá hủy → dừng, xác nhận Homeowner.
-- **Atomic commit:** mỗi feature/bugfix = 1 commit gọn, message nêu lý do + feature id. Bugfix → kèm test tái hiện.
+## 6. BUILD — with guardrails
+- Implement exactly the `scope` + `done_when`. Do NOT add beyond scope. A spec conflict → escalate L2/L3.
+- **Live testing:** anything runnable must be *actually run* (curl the endpoint, open the app, build the artifact) — not just read.
+- **`/freeze`:** while fixing a bug, touch only files belonging to the current feature.
+- **`/careful`:** a destructive command → stop, confirm with the Homeowner.
+- **Atomic commits:** one feature/bugfix = one tight commit, the message stating the reason + the feature id. A bugfix ships with a reproducing test.
 
-## 7. VERIFY — adversarial (thay self-review một chiều)
-1. Chạy `init.sh` phần liên quan → all green, dán output vào `progress.md`.
-2. **Refute pass (subagent):** saved workflow **`adversarial-verify`** — xem `subagents.md`. Truyền `done_when` qua `args.criteria`.
-   Mỗi criterion → skeptic *cố refute* + judge reproduce. **≥1 `confirmedFailures` → chưa done**, quay lại BUILD.
-   - Không opt-in Workflow → spawn `Agent` (Explore) thủ công cùng tinh thần.
-3. **Requirement traceability:** mỗi REQ trong Blueprint phải map tới feature. Thiếu → Open Question.
+## 7. VERIFY — adversarial (replacing one-directional self-review)
+1. Run the relevant part of `init.sh` → all green, paste the output into `progress.md`.
+2. **Refute pass (subagent):** the saved workflow **`adversarial-verify`** — see `subagents.md`. Pass `done_when` through `args.criteria`.
+   Each criterion → a skeptic *trying to refute it* + a judge reproducing. **≥1 `confirmedFailures` → not done**, go back to BUILD.
+   - Workflow not opted in → spawn an `Agent` (Explore) by hand in the same spirit.
+3. **Requirement traceability:** every REQ in the Blueprint must map to a feature. Missing one → Open Question.
 
 ## 7.5 SECURITY gate (CSO)
-Chạy checklist `security.md` áp dụng cho feature. **Không SHIP nếu còn P0.**
+Run the parts of the `security.md` checklist that apply to the feature. **Do not SHIP while any P0 remains.**
 
 ## 7.6 DEVEX review
-- **TTHW (time-to-hello-world):** clone → chạy được mất bao lâu? README + `.env.example` đủ chưa?
-- **Friction map:** lỗi mơ hồ, thiếu script, bước thủ công ẩn → ghi + vá nếu rẻ.
+- **TTHW (time-to-hello-world):** clone → how long until it runs? Are the README + `.env.example` sufficient?
+- **Friction map:** vague errors, missing scripts, hidden manual steps → record them + fix when cheap.
 
 ## 8. REFINE
-Được: sửa text/nội dung trong section có sẵn, fix issue VERIFY/SECURITY.
-Không được (quay lại VISION): thêm feature, đổi layout lớn, đổi stack, thêm module. → L3.
+Allowed: editing text/content inside existing sections, fixing VERIFY/SECURITY issues.
+Not allowed (go back to VISION): adding a feature, a major layout change, changing the stack, adding a module. → L3.
 
 ## 9. SHIP — gate + docs
-Chỉ ship khi:
-- [ ] `init.sh` liên quan **all green**.
-- [ ] `parallel-review` (subagent) — **0 P0 confirmed** trên diff.
-- [ ] SECURITY gate pass; client bundle 0 secret.
-- [ ] `feature_list.json` + `progress.md` cập nhật (có bằng chứng).
-- [ ] **Feature dossier** `docs/features/<ID>-<slug>.md` viết xong, đủ 8 mục, `feature_list.json` có field `doc`, `./init.sh docs` **xanh**. Bắt đầu từ `docs/features/_TEMPLATE.md`.
-- [ ] **Docs (Diataxis)** theo diff: *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (flow chính), *Explanation* (vì sao).
-- Commit/PR nêu feature id + REQ đã cover; PR body liệt kê `done_when` đã pass.
+Only ship when:
+- [ ] The relevant `init.sh` is **all green**.
+- [ ] `parallel-review` (subagent) — **0 confirmed P0s** on the diff.
+- [ ] The SECURITY gate passed; 0 secrets in the client bundle.
+- [ ] `feature_list.json` + `progress.md` updated (with evidence).
+- [ ] The **feature dossier** `docs/features/<ID>-<slug>.md` is finished, all 8 sections present, `feature_list.json` has the `doc` field, `./init.sh docs` is **green**. Start from `docs/features/_TEMPLATE.md`.
+- [ ] **Docs (Diataxis)** matching the diff: *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (the main flow), *Explanation* (why).
+- The commit/PR states the feature id + the REQs covered; the PR body lists the `done_when` items that passed.
 
-**Lan tỏa:** nếu feature đang ship **đổi hành vi của một F cũ**, phải thêm một dòng có ngày vào **mục 8 (Cập nhật)** trong dossier của F cũ đó — làm ngay trong SHIP này, không để nợ. Dossier lệch với code còn tệ hơn không có dossier.
+**Ripple:** if the feature being shipped **changes the behaviour of an older F**, you must add a dated line to **section 8 (Updates)** of that older F's dossier — inside this SHIP, never deferred. A dossier that drifts from the code is worse than no dossier.
 
 ## 10. MONITOR — post-ship
-- Health check sau deploy.
-- Smoke test flow chính.
-- Kiểm tra hạ tầng (DB advisors, logs, error rate).
-- Ghi kết quả vào `progress.md`; hồi quy → mở feature fix mới, không sửa lén.
+- Health check after deploy.
+- Smoke test the main flow.
+- Check the infrastructure (DB advisors, logs, error rate).
+- Record the results in `progress.md`; a regression → open a new fix feature, never patch in place.
 
 ---
 
-## Checkpoint gates (không bỏ qua)
-- **BUILD→VERIFY:** status DONE/DEFERRED có lý do; không BLOCKED chưa resolve.
-- **VERIFY→SECURITY:** adversarial refute pass; traceability đủ.
-- **SECURITY→SHIP:** 0 P0 security; 0 secret trong bundle.
-- **SHIP→next:** state cập nhật + bằng chứng + docs sync + **dossier feature đã ghi** (`./init.sh docs` xanh).
+## Checkpoint gates (never skipped)
+- **BUILD→VERIFY:** status DONE/DEFERRED with a reason; nothing left BLOCKED unresolved.
+- **VERIFY→SECURITY:** the adversarial refute pass ran; traceability is complete.
+- **SECURITY→SHIP:** 0 security P0s; 0 secrets in the bundle.
+- **SHIP→next:** state updated + evidence + docs in sync + **the feature dossier written** (`./init.sh docs` green).
 
-## Memory routine (mỗi cuối phiên)
-Ghi vào harness memory những gì không suy ra được từ code: quyết định kiến trúc phát sinh, cạm bẫy đã gặp, trade-off. Cập nhật `session-handoff.md` trước khi dừng.
+## Memory routine (every end of session)
+Record in the harness memory whatever cannot be derived from the code: architectural decisions that emerged, pitfalls hit, trade-offs. Update `session-handoff.md` before stopping.

@@ -28,7 +28,7 @@ using_harness_content="$(cat "$skill_file")"
 
 # --- Live state: active feature, its status, and what verifies it ------------
 # Best-effort. No node -> we say so rather than inject a stale or invented state.
-live_state="(khong co node — khong doc duoc feature_list.json; doc thu cong truoc khi lam gi)"
+live_state="(no node — cannot read feature_list.json; read it by hand before doing anything)"
 if command -v node >/dev/null 2>&1; then
   live_state="$(node -e '
 const fs = require("fs");
@@ -52,30 +52,30 @@ try {
       const d = fs_.find(f => f.id === id);
       return !d || !["done","verified"].includes(d.status);
     });
-    if (deps.length) out.push("  !! DEPS CHUA XONG: " + deps.join(", ") + " — khong duoc bat dau " + active.id);
+    if (deps.length) out.push("  !! DEPS NOT DONE: " + deps.join(", ") + " — do not start " + active.id);
   } else {
-    out.push("ACTIVE: (active_feature khong tro toi feature nao — sua feature_list.json truoc)");
+    out.push("ACTIVE: (active_feature points at no feature — fix feature_list.json first)");
   }
   const undocumented = fs_.filter(f => ["done","verified"].includes(f.status) && !f.doc);
-  if (undocumented.length) out.push("!! Feature done nhung thieu field doc: " + undocumented.map(f => f.id).join(", "));
+  if (undocumented.length) out.push("!! Features done but missing the doc field: " + undocumented.map(f => f.id).join(", "));
   console.log(out.join("\n"));
 } catch (e) {
-  console.log("(feature_list.json khong doc duoc: " + e.message + ")");
+  console.log("(feature_list.json unreadable: " + e.message + ")");
 }
 ' "$PROJECT_DIR" 2>&1)"
 fi
 
 # --- Build the injected block ------------------------------------------------
 context="<EXTREMELY_IMPORTANT>
-Ban dang o trong mot project co HARNESS (harness-kit). Harness dieu phoi cach ban lam viec:
-state o feature_list.json, gate co hoc o ./init.sh, pipeline o .claude/workflow/pipeline.md.
+You are inside a project that has a HARNESS (harness-kit). The harness governs how you work:
+state lives in feature_list.json, the mechanical gate is ./init.sh, the pipeline is .claude/workflow/pipeline.md.
 
-**Trang thai THAT cua project nay, doc luc bat dau phien:**
+**The REAL state of this project, read at the start of the session:**
 
 ${live_state}
 
-**Duoi day la toan bo skill 'harness-kit:using-harness' — luat chon gate skill.
-Moi skill khac: dung tool 'Skill'.**
+**Below is the full 'harness-kit:using-harness' skill — the rule for choosing a gate skill.
+For every other skill: use the 'Skill' tool.**
 
 ${using_harness_content}
 </EXTREMELY_IMPORTANT>"

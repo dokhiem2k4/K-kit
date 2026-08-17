@@ -1,56 +1,56 @@
 # Subagents — multi-agent playbook — {{PROJECT_NAME}}
 
-Claude Code có `Agent` (subagent, fresh context) + `Workflow` (script điều phối deterministic, có
-`isolation:'worktree'` cho builders song song).
+Claude Code has `Agent` (a subagent with fresh context) + `Workflow` (a deterministic orchestration script,
+with `isolation:'worktree'` for parallel builders).
 
 ## Opt-in & cost
-- `Workflow` **chỉ chạy khi Homeowner opt-in**.
-- Mỗi fan-out tốn token → chỉ dùng khi đáng (verify feature nặng, review diff lớn, build nhiều leaf độc lập). Việc vặt → inline.
+- `Workflow` **only runs when the Homeowner opts in**.
+- Every fan-out costs tokens → use it only when it is worth it (verifying a heavy feature, reviewing a large diff, building several independent leaves). Small jobs → inline.
 
-## 3 pattern
-| Pattern | Context | Dùng cho | Ràng buộc |
+## 3 patterns
+| Pattern | Context | Use for | Constraint |
 |---|---|---|---|
-| **Coordinator** | Worker fresh (zero inherit) | verify/review/research nhiều pha | An toàn nhất; prompt self-contained |
-| **Fork/worktree** | Worktree riêng | build leaf độc lập song song | **1 cấp** — worker không fork tiếp; coordinator merge |
-| **Swarm** | Task list chung | workstream dài, độc lập | Flat roster |
+| **Coordinator** | Workers start fresh (inherit nothing) | multi-phase verify/review/research | Safest; prompts must be self-contained |
+| **Fork/worktree** | Its own worktree | building independent leaves in parallel | **1 level** — workers do not fork again; the coordinator merges |
+| **Swarm** | A shared task list | long, independent workstreams | Flat roster |
 
-**Luật vàng:** coordinator **tổng hợp rồi mới giao**, không "based on your findings". Worker: prompt tự chứa + tool tối thiểu (`Explore` verify/read, `general-purpose` build).
+**The golden rule:** the coordinator **synthesizes before delegating**, never "based on your findings". Workers get a self-contained prompt + minimal tools (`Explore` to verify/read, `general-purpose` to build).
 
-## Saved workflows (gọi bằng tên)
+## Saved workflows (invoked by name)
 
-### 1. `adversarial-verify` — VERIFY (thay self-review một chiều)
-Đọc `feature_list.json`, lấy `done_when` của feature + security check áp dụng, truyền qua `args`:
+### 1. `adversarial-verify` — VERIFY (replacing one-directional self-review)
+Read `feature_list.json`, take the feature's `done_when` + the applicable security checks, pass them via `args`:
 ```
 Workflow({ name:'adversarial-verify', args:{
   featureId:'F0X',
-  criteria:[ "...", "..." ],            // tu done_when
-  securityChecks:[ "..." ],             // tu security.md
-  context:'note them (optional)'
+  criteria:[ "...", "..." ],            // from done_when
+  securityChecks:[ "..." ],             // from security.md
+  context:'extra notes (optional)'
 }})
 ```
-- Mỗi criterion → skeptic *cố refute* (đọc repo thật) → judge reproduce độc lập.
-- Trả `confirmedFailures[]`. **≥1 → chưa done**, quay lại BUILD.
+- Each criterion → a skeptic *trying to refute it* (reading the real repo) → a judge reproducing independently.
+- Returns `confirmedFailures[]`. **≥1 → not done**, go back to BUILD.
 
-### 2. `parallel-review` — SHIP gate (thay cross-model second-opinion)
+### 2. `parallel-review` — the SHIP gate (replacing a cross-model second opinion)
 ```
-Workflow({ name:'parallel-review' })   // khong can args; subagent tu chay git diff
+Workflow({ name:'parallel-review' })   // no args needed; the subagents run git diff themselves
 ```
-- Lens song song: correctness / authz / secret-leak / injection / config / devex.
-- Mỗi finding → verify đối kháng mới sống. Trả `confirmed[]` sort P0→P2. **P0 confirmed → không SHIP.**
+- Parallel lenses: correctness / authz / secret-leak / injection / config / devex.
+- A finding only survives an adversarial verification. Returns `confirmed[]` sorted P0→P2. **A confirmed P0 → do not SHIP.**
 
-### 3. `parallel-build` — BUILD leaf độc lập (fork/worktree)
-Chỉ cho sub-task **thực sự độc lập** (không chung lib/schema).
+### 3. `parallel-build` — building independent leaves (fork/worktree)
+Only for sub-tasks that are **genuinely independent** (no shared lib/schema).
 ```
 Workflow({ name:'parallel-build', args:{ featureId:'F0X', tasks:[
   { id:'a', spec:'...', files:['path/a'] },
   { id:'b', spec:'...', files:['path/b'] }
 ]}})
 ```
-- Mỗi builder chạy **worktree riêng** → không đụng file nhau.
-- **Coordinator review + merge** rồi chạy `parallel-review` + `init.sh`.
+- Each builder runs in **its own worktree** → they never touch each other's files.
+- The **coordinator reviews + merges**, then runs `parallel-review` + `init.sh`.
 
 ## Gotchas
-- Workflow script **không đọc filesystem** → truyền dữ liệu qua `args`; subagent bên trong mới đọc repo.
-- Worker coordinator-pattern **không thấy context của bạn** → prompt tự chứa.
-- Fork/worktree **1 cấp**: builder không spawn builder.
-- Kết quả subagent là *đầu vào để bạn tổng hợp*, không phải quyết định cuối — Builder chính vẫn cập nhật `progress.md`.
+- Workflow scripts **cannot read the filesystem** → pass data through `args`; only the subagents inside read the repo.
+- Coordinator-pattern workers **cannot see your context** → make the prompt self-contained.
+- Fork/worktree is **1 level**: a builder never spawns a builder.
+- Subagent results are *input for you to synthesize*, not the final decision — the main Builder still updates `progress.md`.

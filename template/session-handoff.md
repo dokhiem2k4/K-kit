@@ -1,24 +1,24 @@
 # Session Handoff — {{PROJECT_NAME}}
 
-> Đọc file này đầu phiên. Cập nhật cuối phiên trước khi dừng.
+> Read this file at the start of a session. Update it at the end, before stopping.
 
-## Bối cảnh nhanh
+## Quick context
 - Blueprint: `{{BLUEPRINT_PATH}}`.
 - Harness: `CLAUDE.md` (invariants), `feature_list.json` (state), `.claude/workflow/` (pipeline + security + subagents).
 - Verify: `./init.sh <target>`.
 
-## Đang ở đâu (restart markers)
+## Where things stand (restart markers)
 - **Last Updated:** {{DATE}}.
-- **Current Objective / Feature active:** F01 (chưa bắt đầu).
-- **Recommended Next Step:** scaffold theo Blueprint → `./init.sh scaffold`.
-- **Blockers:** _(keys/quyết định đợi Homeowner)_
-- **Files:** harness files ở root + `.claude/`; chưa có file sản phẩm.
+- **Current Objective / Active feature:** F01 (not started).
+- **Recommended Next Step:** scaffold per the Blueprint → `./init.sh scaffold`.
+- **Blockers:** _(keys/decisions waiting on the Homeowner)_
+- **Files:** harness files at the root + `.claude/`; no product files yet.
 
-## Quyết định treo (cần Homeowner)
-- _(liệt kê)_
+## Pending decisions (need the Homeowner)
+- _(list them)_
 
-## Next Session — cách tiếp tục (clean restart)
-1. Đọc `progress.md` + file này.
-2. Lấy `active_feature` từ `feature_list.json`, đọc `done_when`+`verify`.
-3. Theo `.claude/workflow/pipeline.md`: BUILD → VERIFY(adversarial) → SECURITY → DevEx → SHIP.
-4. Cập nhật state + bằng chứng vào `progress.md`; ghi bài học vào harness memory.
+## Next Session — how to continue (clean restart)
+1. Read `progress.md` and this file.
+2. Take `active_feature` from `feature_list.json`, read its `done_when` + `verify`.
+3. Follow `.claude/workflow/pipeline.md`: BUILD → VERIFY (adversarial) → SECURITY → DevEx → SHIP.
+4. Update the state + evidence in `progress.md`; record lessons in the harness memory.

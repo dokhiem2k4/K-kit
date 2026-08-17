@@ -1,310 +1,310 @@
-# Design — Tier, Rollback, Frontmatter, Drift-lock cho harness-kit
+# Design — Tier, Rollback, Frontmatter, Drift-lock for harness-kit
 
-**Ngày:** 2026-08-04
-**Trạng thái:** đã duyệt (chờ implementation plan)
-**Phạm vi:** `hooks/verify-gate.js`, `template/*`, `skills/*`, `tests/*`, `README.md`
+**Date:** 2026-08-04
+**Status:** approved (awaiting an implementation plan)
+**Scope:** `hooks/verify-gate.js`, `template/*`, `skills/*`, `tests/*`, `README.md`
 
 ---
 
-## 1. Vấn đề
+## 1. The problem
 
-Bốn hạn chế còn lại sau khi đối chiếu bản phân tích với implementation thật:
+Four remaining limitations, after checking the analysis against the real implementation:
 
-1. **Không có rollback strategy.** Grep toàn repo cho `rollback|recovery|revert strategy`: 0 kết quả.
-   Đường xử lý duy nhất là forward-fix (`pipeline.md:58` — "hồi quy → mở feature fix mới").
-   Forward-fix chữa được code, không chữa được migration đã chạy, data đã ghi đè, webhook đã bắn.
-2. **Không phân cấp workflow.** Sửa typo và thay đổi authentication đi qua cùng 7 gate, cùng dossier 8 mục.
-3. **Dossier không có metadata cấu trúc.** Dòng `_TEMPLATE.md:3` (`> **Status:** … · **Ngày:** …`)
-   đã trùng lặp `status` với `feature_list.json` từ trước, nhưng phi cấu trúc nên không ai kiểm được.
-4. **SHIP checklist trùng lặp, không có gì khoá.** Và nó **đã lệch sẵn** — xem §5.
+1. **No rollback strategy.** Grepping the whole repo for `rollback|recovery|revert strategy`: 0 hits.
+   The only path is forward-fix (`pipeline.md:58` — "a regression → open a new fix feature").
+   Forward-fix cures code; it does not cure a migration that already ran, data already overwritten, or a webhook already fired.
+2. **No workflow tiering.** Fixing a typo and changing authentication go through the same 7 gates and the same 8-section dossier.
+3. **The dossier has no structured metadata.** The `_TEMPLATE.md:3` line (`> **Status:** … · **Date:** …`)
+   already duplicated `status` from `feature_list.json`, but being unstructured, nobody could check it.
+4. **The SHIP checklist is duplicated with nothing locking it.** And it **has already drifted** — see §5.
 
-**Ba nhận xét ban đầu đã bị bác sau khi đối chiếu code, ghi lại để không quay lại bàn:**
+**Three initial observations were refuted after checking the code; recorded so we do not relitigate:**
 
-| Nhận xét | Vì sao không đúng |
+| Observation | Why it is wrong |
 |---|---|
-| "Tài liệu quá lớn" | Runtime chỉ nạp `CLAUDE.md` (86 dòng) + đúng 1 skill (57–120 dòng). README không vào context agent. |
-| "Thiếu dependency management" | `feature_list.json` đã có `dependencies`; `hooks/session-start:51-55` chặn feature có dep chưa xong. |
-| "Agent phải tự nhớ quy trình" | `hooks/session-start` bơm state; `hooks/verify-gate` chặn ghi `done` không bằng chứng. Còn hở: `progress.md`, `session-handoff.md`. |
+| "The documentation is too large" | At runtime only `CLAUDE.md` (86 lines) + exactly 1 skill (57–120 lines) are loaded. The README never enters the agent's context. |
+| "Dependency management is missing" | `feature_list.json` already has `dependencies`; `hooks/session-start:51-55` blocks a feature with unfinished deps. |
+| "The agent has to remember the process itself" | `hooks/session-start` injects the state; `hooks/verify-gate` blocks writing `done` without evidence. Still open: `progress.md`, `session-handoff.md`. |
 
-## 2. Quyết định đã chốt
+## 2. Decisions already settled
 
-| Câu hỏi | Chốt | Lý do |
+| Question | Settled | Reason |
 |---|---|---|
-| Ai gán `tier` | **Homeowner gán, agent chỉ được nâng** | Tái dùng cơ chế sẵn có (`verify-gate` chặn ghi vào `feature_list.json`) thay vì phát minh cơ chế mới |
-| Tier bỏ qua gate nào | **Không bao giờ bỏ verify.** Chỉ đổi chi phí dossier + review | Giữ tier là thứ **có thể gán sai mà hệ thống vẫn an toàn**; hợp đồng `VERIFY OK` không đổi một chữ |
-| Rollback sống ở đâu | **Mục 9 của dossier, nối cuối.** `Cập nhật` giữ nguyên mục 8 | Trong harness-kit, thứ gì không có validator thì không tồn tại |
-| Frontmatter chứa gì | **Thay dòng metadata cũ.** 3 field mirror có gate + 5 field dossier-owned | Không tăng trùng lặp so với hiện tại, mà lần đầu kiểm được |
-| Chống drift bằng gì | **Assertion 2 vế (coverage + chốt đếm)**, không generate | Repo đã có tiền lệ đúng dạng: hợp đồng `VERIFY OK` giữ bằng assertion |
+| Who assigns `tier` | **The Homeowner assigns it; the agent may only raise it** | Reuses the existing mechanism (`verify-gate` blocking writes to `feature_list.json`) rather than inventing a new one |
+| Which gates a tier skips | **Verify is never skipped.** Only the dossier cost + review change | Keeps tier something that **can be assigned wrongly while the system stays safe**; the `VERIFY OK` contract does not change by a single character |
+| Where rollback lives | **Section 9 of the dossier, appended at the end.** `Updates` stays as section 8 | In harness-kit, anything without a validator does not exist |
+| What the frontmatter holds | **Replaces the old metadata line.** 3 mirrored fields with a gate + 5 dossier-owned fields | No more duplication than today, but checkable for the first time |
+| How drift is prevented | **A two-sided assertion (coverage + a count pin)**, not generation | The repo already has the right precedent: the `VERIFY OK` contract is held by assertions |
 
-**Cố ý KHÔNG làm (YAGNI):**
+**Deliberately NOT doing (YAGNI):**
 
-- `required_by` — suy ngược được từ `dependencies`; thêm field là tạo state lệch.
-- Mục "Impact Analysis" riêng — mục 1, 4, 6 đã phủ phần lớn.
-- Suy `tier` từ diff — đẩy phần khó nhất vào `init.sh`, file người dùng buộc phải customize.
-- Sinh frontmatter tự động — `init.sh` phải thuần đọc-và-phán, không được sửa thứ nó đang chấm.
-- Rollback tự động hoá (script revert, health-check gate) — harness điều phối agent, không chạy hạ tầng.
+- `required_by` — derivable in reverse from `dependencies`; adding the field creates divergent state.
+- A separate "Impact Analysis" section — sections 1, 4 and 6 already cover most of it.
+- Inferring `tier` from the diff — that pushes the hardest part into `init.sh`, the very file users must customize.
+- Auto-generating the frontmatter — `init.sh` must purely read and judge, never edit what it is grading.
+- Automating rollback (revert scripts, health-check gates) — the harness orchestrates the agent, it does not run infrastructure.
 
 ## 3. Tier
 
 ### 3.1 Data model
 
-Field mới trong mỗi feature của `feature_list.json`:
+A new field on each feature in `feature_list.json`:
 
 ```json
 { "id": "F03", "name": "Auth", "tier": "strict", "status": "pending" }
 ```
 
-Thang: `lite` < `standard` < `strict`. **Vắng mặt = `standard`** — project đã bootstrap không cần đụng gì.
+The scale: `lite` < `standard` < `strict`. **Absent = `standard`** — already-bootstrapped projects need to change nothing.
 
-### 3.2 Tier đổi cái gì
+### 3.2 What a tier changes
 
 | | `lite` | `standard` | `strict` |
 |---|---|---|---|
-| `init.sh` liên quan + secret grep | ✅ | ✅ | ✅ |
-| Dossier | ❌ (một dòng bằng chứng trong `progress.md`) | ✅ 9 mục | ✅ 9 mục |
-| Mục 9 Rollback | — | được ghi `—` | **phải có nội dung thật** |
-| `parallel-review` | ❌ | tuỳ | ✅ |
-| Security checklist | rút gọn (secret grep) | phần liên quan | full STRIDE |
+| The relevant `init.sh` + secret grep | ✅ | ✅ | ✅ |
+| Dossier | ❌ (one line of evidence in `progress.md`) | ✅ 9 sections | ✅ 9 sections |
+| Section 9 Rollback | — | may be `—` | **must have real content** |
+| `parallel-review` | ❌ | optional | ✅ |
+| Security checklist | reduced (secret grep) | the relevant parts | full STRIDE |
 
-Hàng đầu là bất biến: verify chạy ở mọi tier. Hệ quả cơ học — `verify-gate` **không cần biết `tier` tồn tại**
-cho luật `status`, và không có nhánh "lite thì cho qua không cần marker". Nếu `lite` được miễn verify thì
-feature `lite` sẽ không bao giờ có marker, buộc phải dạy gate một ngoại lệ, và ngoại lệ đó chính là
-đường lách mà cả kiến trúc này sinh ra để bịt.
+The first row is invariant: verify runs at every tier. A mechanical consequence — `verify-gate` **need not know `tier` exists**
+for the `status` rule, and there is no "lite passes without a marker" branch. If `lite` were exempt from verify, a
+`lite` feature would never have a marker, forcing us to teach the gate an exception — and that exception is exactly
+the loophole this whole architecture exists to close.
 
-### 3.3 Luật chặn — khác loại với luật `status`
+### 3.3 The blocking rule — a different kind from the `status` rule
 
-Luật `status` là *có điều kiện* (chặn khi thiếu marker) và **fail-open** khi hợp đồng vỡ
-(`verify-gate.js:108-122`), vì lúc đó không tồn tại đường nào để agent thoả mãn gate.
+The `status` rule is *conditional* (it blocks when the marker is missing) and **fails open** when the contract breaks
+(`verify-gate.js:108-122`), because at that point no path exists for the agent to satisfy the gate.
 
-Luật `tier` không có tính chất đó — luôn tồn tại đường hợp lệ (không hạ tier, hoặc hỏi Homeowner):
+The `tier` rule has no such property — a valid path always exists (do not lower the tier, or ask the Homeowner):
 
-> **Chặn nếu tier kết quả của bất kỳ feature nào thấp hơn tier trước đó**, với "trước đó" = tier trên đĩa,
-> hoặc `standard` nếu feature chưa tồn tại. **Không phụ thuộc marker. Không fail-open.**
+> **Block if the resulting tier of any feature is lower than its previous tier**, where "previous" = the tier on disk,
+> or `standard` if the feature did not exist. **Independent of the marker. Never fails open.**
 
-Hệ quả có chủ ý:
+Deliberate consequences:
 
-- Agent tạo feature mới thì **không viết `tier`** → rơi về `standard`.
-- Viết `"tier": "lite"` cho feature mới **bị chặn** (thấp hơn default).
-- Nâng lên `strict` **luôn được phép** — agent có đúng một chiều tự do, chiều làm quy trình chặt hơn.
-- Đặt `lite` là miễn trừ, và miễn trừ phải có chữ ký người: Homeowner tự sửa file.
+- An agent creating a new feature **does not write `tier`** → it falls back to `standard`.
+- Writing `"tier": "lite"` on a new feature **is blocked** (lower than the default).
+- Raising to `strict` **is always allowed** — the agent has exactly one direction of freedom: the one that tightens the process.
+- Setting `lite` is an exemption, and an exemption needs a human signature: the Homeowner edits the file themselves.
 
-### 3.4 Cách tính "tier kết quả" trong hook
+### 3.4 How the hook computes the "resulting tier"
 
-Trong nhánh `pre-edit` của `hooks/verify-gate.js`, sau khối kiểm `status` hiện có:
+Inside the `pre-edit` branch of `hooks/verify-gate.js`, after the existing `status` check block:
 
-- `Write` → lấy `tool_input.content`.
-- `Edit` → đọc file trên đĩa, thay `old_string` bằng `new_string`.
-- `MultiEdit` → áp lần lượt các `edits` theo thứ tự.
+- `Write` → take `tool_input.content`.
+- `Edit` → read the file on disk and replace `old_string` with `new_string`.
+- `MultiEdit` → apply each of the `edits` in order.
 
-Parse JSON cả hai bên, so từng `id`. Parse hỏng → **không cho qua** (theo tiền lệ `verify-gate.js:101`).
+Parse the JSON on both sides and compare per `id`. A parse failure → **do not let it through** (following the precedent at `verify-gate.js:101`).
 
-### 3.5 Ai gán tier
+### 3.5 Who assigns the tier
 
-`skills/planning-features` được sửa để hỏi Homeowner tier khi tạo feature và ghi kết quả.
-Vì gate chặn mọi giá trị dưới `standard`, câu trả lời `lite` phải do người tự tay sửa file.
+`skills/planning-features` is edited to ask the Homeowner for the tier when creating a feature and to record the answer.
+Because the gate blocks every value below `standard`, an answer of `lite` must be applied by a human editing the file.
 
-## 4. Dossier — frontmatter + mục 9
+## 4. Dossier — frontmatter + section 9
 
 ### 4.1 Frontmatter
 
-Thay dòng blockquote `_TEMPLATE.md:3` bằng:
+Replace the blockquote line `_TEMPLATE.md:3` with:
 
 ```yaml
 ---
-feature: F03          # mirror — phải khớp feature_list.json
+feature: F03          # mirror — must match feature_list.json
 status: done          # mirror
 tier: strict          # mirror
 date: 2026-08-04      # dossier-owned
 commit: a1b2c3d       # dossier-owned
 blueprint: "§4.2"     # dossier-owned
 security: passed      # dossier-owned
-reversible: false     # dossier-owned — nối với mục 9
+reversible: false     # dossier-owned — ties into section 9
 ---
 ```
 
-Parser: YAML **phẳng** tự viết trong `check_docs` — chỉ `key: value`, không nested, không list.
-Khoảng 10 dòng node. Không thêm dependency; harness-kit vẫn chỉ cần `node` + `bash`.
+The parser: a hand-written **flat** YAML reader inside `check_docs` — only `key: value`, no nesting, no lists.
+Roughly 10 lines of node. No new dependency; harness-kit still needs only `node` + `bash`.
 
-Luật parser, chốt rõ để implementation không phải đoán:
+Parser rules, pinned down so the implementation need not guess:
 
-- Frontmatter phải là khối đầu tiên của file, mở và đóng bằng đúng một dòng `---`.
-- Mỗi dòng dạng `key: value`. Bỏ qua dòng trống và dòng bắt đầu bằng `#`.
-- Cắt bỏ phần sau ` #` (dấu thăng có khoảng trắng đứng trước) — comment cuối dòng.
-  Các comment `# mirror` trong ví dụ trên là chú giải của spec này; `_TEMPLATE.md` ship **không** có chúng.
-- Giá trị được trim, bỏ cặp nháy bao ngoài nếu có. Không parse kiểu — `reversible: false` so sánh
-  bằng chuỗi `"false"`.
-- Thiếu khối frontmatter, hoặc thiếu một trong ba field mirror → FAIL.
+- The frontmatter must be the first block in the file, opened and closed by exactly one `---` line.
+- Every line is `key: value`. Blank lines and lines starting with `#` are skipped.
+- Everything after ` #` (a hash preceded by a space) is stripped — an end-of-line comment.
+  The `# mirror` comments in the example above are annotations belonging to this spec; the shipped `_TEMPLATE.md` does **not** carry them.
+- Values are trimmed, and a surrounding pair of quotes is removed if present. No type parsing — `reversible: false` is compared
+  as the string `"false"`.
+- A missing frontmatter block, or a missing one of the three mirrored fields → FAIL.
 
-Frontmatter dùng `---` nên không đụng hai luật quét sẵn có: quét `## N.` theo dòng, và luật cấm `<!--`.
+The frontmatter uses `---`, so it collides with neither existing scan rule: the line-wise `## N.` scan, nor the ban on `<!--`.
 
-### 4.2 Mục 9
+### 4.2 Section 9
 
 ```markdown
 ## 9. Rollback & Recovery
 
-**Cách quay lại:** <lệnh/bước cụ thể — revert commit nào, hạ version nào, tắt flag nào>
+**How to revert:** <concrete commands/steps — which commit to revert, which version to roll back, which flag to turn off>
 
-**KHÔNG quay lại được:** <migration đã chạy, data đã ghi đè, webhook/email đã bắn, cache bên thứ ba — hoặc "—">
+**CANNOT be reverted:** <migrations already run, data already overwritten, webhooks/emails already sent, third-party caches — or "—">
 
-**Dấu hiệu cần rollback:** <triệu chứng quan sát được, ngưỡng cụ thể — hoặc "—">
+**Signs a rollback is needed:** <observable symptoms, concrete thresholds — or "—">
 ```
 
-Dòng giữa là lý do mục này tồn tại. Nó là thứ duy nhất forward-fix không thay thế được,
-và là thứ người ta chỉ nghĩ ra khi bị bắt viết.
+The middle line is why this section exists. It is the one thing forward-fix cannot replace,
+and the one thing people only think about when forced to write it down.
 
-### 4.3 Luật mới trong `check_docs`
+### 4.3 New rules in `check_docs`
 
-| Điều kiện | Hành vi |
+| Condition | Behaviour |
 |---|---|
-| `tier: lite` + status `done`/`verified` | **bỏ qua hoàn toàn** — không đòi field `doc`, không quét dossier |
-| còn lại | dossier đủ **9 mục** đúng thứ tự, hết placeholder `<TODO:`, hết `<!--` (giữ luật cũ) |
-| mọi dossier bị quét | frontmatter parse được; `feature`/`status`/`tier` khớp `feature_list.json` |
-| `tier: strict` | mục 9 có nội dung thật — xem luật dưới |
-| `tier: strict` + `reversible: false` | **in cảnh báo, KHÔNG fail** — xem §4.4 |
+| `tier: lite` + status `done`/`verified` | **skipped entirely** — no `doc` field required, no dossier scan |
+| everything else | a dossier with all **9 sections** in order, no `<TODO:` placeholders, no `<!--` (the existing rules stay) |
+| every scanned dossier | the frontmatter parses; `feature`/`status`/`tier` match `feature_list.json` |
+| `tier: strict` | section 9 has real content — see the rule below |
+| `tier: strict` + `reversible: false` | **print a warning, do NOT fail** — see §4.4 |
 
-**Luật "nội dung thật" cho mục 9 (chỉ áp dụng `tier: strict`).** Validator bám vào ba nhãn in đậm
-cố định — cùng cách nó đang bám vào heading `## N.`:
+**The "real content" rule for section 9 (applies only at `tier: strict`).** The validator anchors on three fixed bold
+labels — the same way it already anchors on the `## N.` headings:
 
-- Thân mục 9 phải có đủ ba dòng bắt đầu bằng `**Cách quay lại:**`, `**KHÔNG quay lại được:**`,
-  `**Dấu hiệu cần rollback:**`. Thiếu nhãn nào → FAIL.
-- Riêng `**Cách quay lại:**` phải có nội dung sau dấu hai chấm và nội dung đó **không được là `—`**.
-- Hai nhãn còn lại được phép ghi `—` (không phải feature nào cũng có phần không-hoàn-tác-được).
+- The body of section 9 must contain all three lines starting with `**How to revert:**`, `**CANNOT be reverted:**`,
+  and `**Signs a rollback is needed:**`. A missing label → FAIL.
+- `**How to revert:**` specifically must have content after the colon, and that content **must not be `—`**.
+- The other two labels may be `—` (not every feature has an irreversible part).
 
-Với `tier: standard`, chỉ cần heading `## 9.` tồn tại — thân mục được phép ghi `—`.
+At `tier: standard`, only the `## 9.` heading has to exist — the body may be `—`.
 
-### 4.4 Vì sao `reversible` không phải gate cứng
+### 4.4 Why `reversible` is not a hard gate
 
-`reversible` là field **do agent tự khai**. Biến nó thành thứ chặn ship chỉ dạy agent viết `reversible: true`.
-Một field tự khai không được phép làm gate cho chính nó — đó đúng là nguyên tắc `verify-gate` đang áp dụng
-khi nó đọc output `init.sh` chứ không đọc lời agent nói.
+`reversible` is a field **the agent declares itself**. Making it block the ship would only teach the agent to write `reversible: true`.
+A self-declared field must never gate itself — which is precisely the principle `verify-gate` already applies
+when it reads `init.sh` output rather than what the agent says.
 
-Nên tách làm hai tầng:
+So it splits into two layers:
 
-- `init.sh` **in cảnh báo** khi gặp `strict` + `reversible: false`, không fail.
-- `skills/shipping-a-feature` coi tổ hợp đó là **escalation L3** — dừng, hỏi Homeowner.
+- `init.sh` **prints a warning** on `strict` + `reversible: false`, without failing.
+- `skills/shipping-a-feature` treats that combination as an **L3 escalation** — stop, ask the Homeowner.
 
-Giá trị thật của field là lúc sự cố: trả lời "feature nào không revert được" bằng một lệnh grep.
+The field's real value comes during an incident: answering "which features cannot be reverted" with a single grep.
 
-## 5. Drift-lock cho SHIP checklist
+## 5. Drift-lock for the SHIP checklist
 
-### 5.1 Hiện trạng — đã lệch sẵn
+### 5.1 Current state — already drifted
 
-SHIP checklist chỉ có **hai** bản, không phải ba:
+The SHIP checklist has **two** copies, not three:
 
-- `pipeline.md:42-50` — 6 ô `- [ ]`
-- `skills/shipping-a-feature/SKILL.md:18-25` — 8 ô `- [ ]`
-- `CLAUDE.md:68-73` — **không phải** checklist SHIP mà là *Definition of Done* ở granularity khác
+- `pipeline.md:42-50` — 6 `- [ ]` boxes
+- `skills/shipping-a-feature/SKILL.md:18-25` — 8 `- [ ]` boxes
+- `CLAUDE.md:68-73` — **not** a SHIP checklist but the *Definition of Done*, at a different granularity
 
-Hai bản kia đã lệch: skill tách "SECURITY gate" với "client bundle 0 secret" thành hai ô, pipeline gộp làm một.
-Drift đã xảy ra rồi, chỉ chưa ai thấy. **Phải thống nhất granularity trước, khoá sau** — không thống nhất
-thì không có gì để đếm.
+The other two have already drifted: the skill splits "SECURITY gate" and "0 secrets in the client bundle" into two boxes; the pipeline merges them.
+The drift already happened, nobody had noticed. **Unify the granularity first, lock it second** — with nothing unified,
+there is nothing to count.
 
-### 5.2 Danh sách chuẩn — 8 mục
+### 5.2 The canonical list — 8 items
 
-Lấy granularity của skill (mịn hơn) làm chuẩn, sửa `pipeline.md` §9 cho khớp:
+Take the skill's (finer) granularity as canonical and bring `pipeline.md` §9 into line:
 
-| key | khái niệm |
+| key | concept |
 |---|---|
-| `verify` | `./init.sh` phần liên quan all green |
-| `review` | review diff đã chạy, 0 P0 confirmed |
-| `security` | SECURITY gate pass |
-| `secret` | client bundle 0 secret |
-| `state` | `feature_list.json` + `progress.md` cập nhật |
-| `dossier` | dossier đủ 9 mục, `./init.sh docs` xanh |
-| `docs` | Docs theo diff (Diataxis) |
-| `commit` | commit/PR nêu feature id + REQ |
+| `verify` | the relevant `./init.sh` is all green |
+| `review` | the diff review ran, 0 confirmed P0s |
+| `security` | the SECURITY gate passed |
+| `secret` | 0 secrets in the client bundle |
+| `state` | `feature_list.json` + `progress.md` updated |
+| `dossier` | the dossier has all 9 sections, `./init.sh docs` green |
+| `docs` | docs matching the diff (Diataxis) |
+| `commit` | the commit/PR states the feature id + REQs |
 
-Checklist giữ nguyên **8 ô ở mọi tier** — số ô là hằng số để chốt đếm ở §5.3 có nghĩa.
-Tier đổi *cách tick*, không đổi *số ô*: với `lite`, ô `dossier` được tick bằng dòng bằng chứng trong
-`progress.md` thay vì file dossier, và ô `review` được tick bằng "không áp dụng ở tier này".
-Cả hai đều phải ghi rõ lý do khi tick — `lite` không phải giấy phép bỏ trống.
+The checklist keeps **8 boxes at every tier** — the box count is a constant, so the count pin in §5.3 means something.
+The tier changes *how a box is ticked*, not *how many boxes there are*: at `lite`, the `dossier` box is ticked with a line of evidence in
+`progress.md` instead of a dossier file, and the `review` box is ticked with "not applicable at this tier".
+Both must state the reason when ticked — `lite` is not a licence to leave boxes blank.
 
-### 5.3 Assertion — hai vế
+### 5.3 The assertion — two sides
 
-Trong `tests/run-tests.sh`, một mảng 8 dòng `key|regex`, rồi:
+In `tests/run-tests.sh`, an array of 8 `key|regex` lines, then:
 
-1. **Coverage** — mỗi regex khớp trong **cả hai** file. Bắt "thêm mục vào một nơi, quên nơi kia".
-2. **Chốt đếm** — số dòng `- [ ]` trong mỗi file đúng bằng 8. Bắt "thêm mục mà không khai vào mảng chuẩn".
+1. **Coverage** — each regex matches in **both** files. Catches "added an item in one place, forgot the other".
+2. **The count pin** — the number of `- [ ]` lines in each file is exactly 8. Catches "added an item without declaring it in the canonical array".
 
-Vế 2 là vế có răng. Coverage kiểm *"cái tôi biết thì có mặt"*; chốt đếm kiểm *"không có cái tôi không biết"*.
+Side 2 is the one with teeth. Coverage checks *"what I know about is present"*; the count pin checks *"nothing exists that I do not know about"*.
 
-`CLAUDE.md` nằm ngoài vòng khoá (artifact khác). Chỉ thêm một assertion lẻ: dòng `documented` trong
-Definition of Done phải nhắc **9 mục**.
+`CLAUDE.md` stays outside the lock (a different artifact). It only gets one standalone assertion: the `documented` line in
+the Definition of Done must say **9 sections**.
 
-## 6. Files phải sửa — 15
+## 6. Files to change — 15
 
-**Cơ chế (4)**
+**Mechanism (4)**
 
-| File | Việc |
+| File | Work |
 |---|---|
-| `hooks/verify-gate.js` | luật hạ-tier trong nhánh `pre-edit` (§3.3, §3.4) |
-| `template/init.sh` | viết lại `check_docs`: tier-aware, frontmatter, 9 mục, cảnh báo `reversible` |
-| `template/feature_list.json` | field `tier` ở 3 feature mẫu + `legend` + `_howto` |
-| `template/docs/features/_TEMPLATE.md` | frontmatter thay dòng 3 + mục 9 |
+| `hooks/verify-gate.js` | the tier-lowering rule in the `pre-edit` branch (§3.3, §3.4) |
+| `template/init.sh` | rewrite `check_docs`: tier-aware, frontmatter, 9 sections, the `reversible` warning |
+| `template/feature_list.json` | a `tier` field on the 3 sample features + `legend` + `_howto` |
+| `template/docs/features/_TEMPLATE.md` | the frontmatter replacing line 3 + section 9 |
 
 **Instructions (6)**
 
-| File | Việc |
+| File | Work |
 |---|---|
-| `template/CLAUDE.md` | bảng tier; DoD `documented` → 9 mục; nhắc mục 9 |
-| `template/.claude/workflow/pipeline.md` | §9 thống nhất lên 8 ô; ghi chú tier; bước rollback trong MONITOR |
-| `skills/planning-features` | hỏi Homeowner tier khi tạo feature |
-| `skills/shipping-a-feature` | 9 mục; checklist theo tier; `reversible: false` → L3 |
-| `skills/writing-feature-dossier` | frontmatter + mục 9 |
-| `README.md` | tier, rollback, frontmatter, drift-lock; "8 mục" → "9 mục"; số assertion mới; mục nâng cấp project cũ |
+| `template/CLAUDE.md` | the tier table; DoD `documented` → 9 sections; mention section 9 |
+| `template/.claude/workflow/pipeline.md` | unify §9 to 8 boxes; note the tiers; a rollback step in MONITOR |
+| `skills/planning-features` | ask the Homeowner for the tier when creating a feature |
+| `skills/shipping-a-feature` | 9 sections; a tier-aware checklist; `reversible: false` → L3 |
+| `skills/writing-feature-dossier` | frontmatter + section 9 |
+| `README.md` | tier, rollback, frontmatter, drift-lock; "8 sections" → "9 sections"; the new assertion counts; a section on upgrading older projects |
 
 **Tests (3)**
 
-| File | Việc |
+| File | Work |
 |---|---|
-| `tests/run-tests.sh` | fixture `valid_dossier()` thêm frontmatter + mục 9; "8 muc" → 9; assertion tier (lite bỏ qua, mirror lệch → fail, strict + mục 9 rỗng → fail); assertion drift 2 vế; `_TEMPLATE.md` có frontmatter + 9 mục |
-| `tests/test-verify-gate.sh` | tier hạ qua `Write` → deny; hạ qua `Edit` → deny; feature mới đặt `lite` → deny; nâng `strict` → allow; không phụ thuộc marker |
-| `tests/eval-faithfulness.sh` | fixture `honest-pass` cập nhật theo định nghĩa dossier mới |
+| `tests/run-tests.sh` | the `valid_dossier()` fixture gains frontmatter + section 9; "8 sections" → 9; tier assertions (lite skipped, a mismatched mirror → fail, strict + an empty section 9 → fail); the two-sided drift assertion; `_TEMPLATE.md` has frontmatter + 9 sections |
+| `tests/test-verify-gate.sh` | lowering the tier via `Write` → deny; via `Edit` → deny; a new feature set to `lite` → deny; raising to `strict` → allow; independent of the marker |
+| `tests/eval-faithfulness.sh` | the `honest-pass` fixture updated to the new dossier definition |
 
-**Không đụng:** `tests/acceptance.sh` (feature fixture không có `tier` → rơi về `standard`, hành vi như cũ),
-`bootstrap.mjs` (giữ thuần copy + thay token).
+**Untouched:** `tests/acceptance.sh` (the fixture features have no `tier` → they fall back to `standard`, behaviour unchanged),
+`bootstrap.mjs` (stays pure copy + token replacement).
 
-## 7. Thứ tự implementation — 3 chunk
+## 7. Implementation order — 3 chunks
 
-Bốn điểm không tách được thành bốn phần độc lập: **rollback và frontmatter dính nhau** qua `reversible`,
-và cả hai được kiểm bởi cùng một lần viết lại `check_docs`. Tách ra thì phải sửa `check_docs` hai lần.
+The four points do not split into four independent parts: **rollback and frontmatter are coupled** through `reversible`,
+and both are validated by the same rewrite of `check_docs`. Splitting them means editing `check_docs` twice.
 
-| Chunk | Nội dung | Phụ thuộc |
+| Chunk | Content | Depends on |
 |---|---|---|
-| **1. Tier** | field + default `standard` + luật hạ-tier + `planning-features` | — |
-| **2. Dossier schema** | frontmatter + mục 9 + `check_docs` tier-aware + `_TEMPLATE.md` | `tier` từ chunk 1 |
-| **3. Drift lock** | thống nhất `pipeline.md` §9 + assertion 2 vế | "9 mục" chốt từ chunk 2 |
+| **1. Tier** | the field + the `standard` default + the tier-lowering rule + `planning-features` | — |
+| **2. Dossier schema** | frontmatter + section 9 + a tier-aware `check_docs` + `_TEMPLATE.md` | `tier` from chunk 1 |
+| **3. Drift lock** | unify `pipeline.md` §9 + the two-sided assertion | "9 sections" settled in chunk 2 |
 
-Mỗi chunk kết thúc ở trạng thái xanh và ship được độc lập.
+Each chunk ends green and can ship independently.
 
-## 8. Project đã bootstrap trước đó
+## 8. Previously bootstrapped projects
 
-Không tự động nhận gì — `bootstrap.mjs` không đè file có sẵn. Đó là hành vi đúng: không bản nâng cấp nào
-được âm thầm làm đỏ `init.sh` của một project đang chạy.
+They inherit nothing automatically — `bootstrap.mjs` does not overwrite existing files. That is the correct behaviour: no upgrade
+should silently turn a running project's `init.sh` red.
 
-README thêm mục ngắn về đường nâng cấp thủ công: chạy lại bootstrap với `--force` cho riêng `init.sh` và
-`_TEMPLATE.md`, rồi thêm frontmatter + mục 9 vào các dossier đã có. Ai không làm gì thì giữ nguyên hành vi 8 mục.
+The README gains a short section on the manual upgrade path: re-run bootstrap with `--force` for `init.sh` and
+`_TEMPLATE.md` only, then add the frontmatter + section 9 to existing dossiers. Anyone who does nothing keeps the 8-section behaviour.
 
-## 9. Tiêu chí hoàn thành
+## 9. Completion criteria
 
-- [ ] `bash tests/run-tests.sh` xanh, số assertion tăng đúng bằng số assertion mới thêm.
-- [ ] `bash tests/test-verify-gate.sh` xanh, có đủ 4 case tier.
-- [ ] `bash tests/eval-faithfulness.sh` — `honest-pass` vẫn xanh trên cả Sonnet lẫn Haiku.
-- [ ] `bash tests/acceptance.sh` — 5/5 không đổi.
-- [ ] Bootstrap một project sạch → feature `lite` `done` không đòi dossier; feature `strict` `done` thiếu mục 9 → `./init.sh docs` đỏ.
-- [ ] Agent thử hạ tier `strict` → `lite` bị `verify-gate` từ chối, kể cả khi đang có marker.
+- [ ] `bash tests/run-tests.sh` green, with the assertion count up by exactly the number of new assertions.
+- [ ] `bash tests/test-verify-gate.sh` green, with all 4 tier cases present.
+- [ ] `bash tests/eval-faithfulness.sh` — `honest-pass` still green on both Sonnet and Haiku.
+- [ ] `bash tests/acceptance.sh` — 5/5 unchanged.
+- [ ] Bootstrap a clean project → a `lite` `done` feature demands no dossier; a `strict` `done` feature missing section 9 → `./init.sh docs` red.
+- [ ] An agent trying to lower a tier from `strict` → `lite` is refused by `verify-gate`, even while a marker is present.
 
-## 10. Rủi ro
+## 10. Risks
 
-**`eval-faithfulness.sh` probe `honest-pass`.** Đây là control **bắt buộc phải xanh** — không có nó,
-một skill chỉ biết từ chối mọi thứ vẫn đạt 100%. Nó xanh nhờ fixture khớp định nghĩa "dossier hợp lệ" hiện tại,
-và chunk 2 đổi định nghĩa đó. Fixture phải sửa **trong cùng chunk 2**, không để sang chunk sau — nếu không,
-con số "Sonnet 5/5, Haiku 5/5" ở README thành sai mà không ai chạy lại để biết.
+**The `honest-pass` probe in `eval-faithfulness.sh`.** It is the control and **must stay green** — without it,
+a skill that refuses everything still scores 100%. It is green because the fixture matches the current definition of "a valid dossier",
+and chunk 2 changes that definition. The fixture must be updated **inside chunk 2**, never deferred — otherwise the
+"Sonnet 5/5, Haiku 5/5" figure in the README becomes false with nobody re-running it to find out.
 
-**Tier trở thành từ khoá mới cho agent lách.** Giảm thiểu bằng thiết kế: agent chỉ nâng được, không hạ được,
-và dù gán sai tier thì `init.sh` vẫn chạy đủ. Thiệt hại tối đa của một tier sai là tài liệu mỏng,
-không phải code chưa kiểm.
+**Tier becomes a new keyword for the agent to game.** Mitigated by design: the agent can only raise, never lower,
+and even a wrongly assigned tier still runs the full `init.sh`. The worst damage from a wrong tier is thin documentation,
+not unchecked code.
 
-**`check_docs` phình to.** Nó đang là ~30 dòng node inline trong `init.sh`; thêm parser frontmatter,
-nhánh tier và kiểm mục 9 sẽ đẩy lên ~80 dòng. Chấp nhận được, nhưng nếu vượt mốc đó thì tách thành
-`scripts/check-docs.mjs` — cùng lý do `verify-gate.js` từng được tách khỏi hook bash.
+**`check_docs` grows.** It is currently ~30 lines of inline node in `init.sh`; adding a frontmatter parser,
+the tier branches and the section 9 check pushes it to ~80 lines. Acceptable, but past that point it should be split into
+`scripts/check-docs.mjs` — for the same reason `verify-gate.js` was once split out of the bash hook.

@@ -6,66 +6,66 @@ description: Only in a project whose repo root has feature_list.json (a bootstra
 # Shipping a feature
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
-**Nguyen tac:** SHIP la gate, khong phai nghi thuc. Moi o chua tick la mot ly do khong ship.
+**Principle:** SHIP is a gate, not a ritual. Every unticked box is a reason not to ship.
 
-## Checklist SHIP — moi muc phai co bang chung
+## The SHIP checklist — every item needs evidence
 
-- [ ] **`./init.sh` phan lien quan all green** — output moi, dan vao `progress.md`.
-- [ ] **Review diff da chay** — `Workflow({ name:'parallel-review' })` neu co opt-in, hoac spawn `Agent` review thu cong. **0 P0 confirmed.**
-- [ ] **SECURITY gate pass** — `harness-kit:security-gate` chay xong, moi P0 ap dung xanh.
-- [ ] **Client bundle 0 secret** — `./init.sh secret`.
-- [ ] **State cap nhat** — `feature_list.json` status + field `doc`; `progress.md` co bang chung.
-- [ ] **Dossier xong** — `docs/features/<ID>-<slug>.md` du 8 muc, `./init.sh docs` xanh. Xem `harness-kit:writing-feature-dossier`.
-- [ ] **Docs theo diff (Diataxis)** — *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (flow chinh), *Explanation* (vi sao). Chi viet muc nao diff thuc su cham toi.
-- [ ] **Commit/PR** neu feature id + REQ da cover; PR body liet ke `done_when` da pass.
+- [ ] **The relevant part of `./init.sh` is all green** — fresh output, pasted into `progress.md`.
+- [ ] **The diff review has run** — `Workflow({ name:'parallel-review' })` if opted in, or spawn an `Agent` review by hand. **0 confirmed P0s.**
+- [ ] **The SECURITY gate passed** — `harness-kit:security-gate` has run, every applicable P0 green.
+- [ ] **0 secrets in the client bundle** — `./init.sh secret`.
+- [ ] **State updated** — `feature_list.json` status + the `doc` field; `progress.md` holds the evidence.
+- [ ] **The dossier is finished** — `docs/features/<ID>-<slug>.md` with all 8 sections, `./init.sh docs` green. See `harness-kit:writing-feature-dossier`.
+- [ ] **Docs matching the diff (Diataxis)** — *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (the main flow), *Explanation* (why). Only write the parts the diff actually touches.
+- [ ] **Commit/PR** carrying the feature id + the REQs covered; the PR body lists the `done_when` items that passed.
 
-Con **bat ky** o nao trong → chua ship. Khong co "ship truoc, tick sau".
+**Any** box still empty → do not ship. There is no "ship now, tick later".
 
-## DevEx — 2 cau hoi truoc khi ship
+## DevEx — 2 questions before shipping
 
-- **TTHW:** clone repo sach → chay duoc mat bao lau? README + `.env.example` du chua?
-- **Friction:** loi mo ho, thieu script, buoc thu cong an? Ghi lai; va luon neu re.
+- **TTHW:** clone a clean repo → how long until it runs? Are the README and `.env.example` sufficient?
+- **Friction:** vague errors, missing scripts, hidden manual steps? Record them; fix them when cheap.
 
-## Lan toa sang F cu
+## Ripple into older features
 
-Feature nay doi hanh vi cua mot F da ship? Them dong co ngay vao **muc 8** dossier cua F do.
-Ngay bay gio, trong SHIP nay.
+Did this feature change the behaviour of an already-shipped F? Add a dated line to **section 8** of that F's dossier.
+Right now, inside this SHIP.
 
-## MONITOR — sau khi ship
+## MONITOR — after shipping
 
-Ship xong chua phai xong:
+Shipping is not the end:
 
-- Health check sau deploy.
-- Smoke test flow chinh.
-- Kiem tra ha tang: DB advisors, logs, error rate.
-- Ghi ket qua vao `progress.md`.
-- Co hoi quy → **mo feature fix moi**, khong sua len.
+- Health check after deploy.
+- Smoke test the main flow.
+- Check the infrastructure: DB advisors, logs, error rate.
+- Record the results in `progress.md`.
+- Found a regression → **open a new fix feature**, do not patch in place.
 
-## End of Session — de phien sau restart sach
+## End of Session — so the next session restarts clean
 
-Truoc khi dung phien, du feature chua xong:
+Before ending the session, even if the feature is unfinished:
 
-1. **`feature_list.json`** — status dung thuc te + field `doc` neu vua ship.
-2. **`progress.md`** — Current State + bang chung (output lenh, khong phai tom tat).
+1. **`feature_list.json`** — a status matching reality + the `doc` field if you just shipped.
+2. **`progress.md`** — Current State + evidence (command output, not a summary).
 3. **`session-handoff.md`** — Blockers, Files touched, **Recommended Next Step**.
-   Next Step phai cu the den muc phien sau doc xong la lam duoc ngay: ten file, ten lenh, ten feature.
-   "Tiep tuc F03" khong phai next step.
-4. **Memory** — ghi vao harness memory nhung thu **khong suy ra duoc tu code**: quyet dinh kien truc phat sinh, cam bay da gap, trade-off da chon va ly do. Dung ghi lai thu code da noi.
+   The Next Step must be concrete enough that the next session can act immediately: file names, command names, feature ids.
+   "Continue F03" is not a next step.
+4. **Memory** — record in the harness memory whatever **cannot be derived from the code**: architectural decisions that emerged, pitfalls hit, trade-offs chosen and why. Do not restate what the code already says.
 
 ## Red flags
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Con 1 o chua tick nhung khong quan trong" | Moi o la mot gate. Tick het hoac khong ship. |
-| "Dossier de mai viet" | `./init.sh docs` FAIL. Va mai se khong den. |
-| "Review diff ton token, bo qua" | Re hon mot P0 tren prod. |
-| "Ship roi monitor sau" | Monitor la buoc 10, khong phai tuy chon. |
-| "Hoi quy nho, sua len thoi" | Sua len = khong co bang chung, khong co dossier. Mo feature fix. |
-| "Next step ghi 'tiep tuc F03' la du" | Phien sau se mat nua tieng do lai. Ghi ten file + ten lenh. |
-| "Phien nay ngan, khoi handoff" | Compaction khong quan tam phien dai hay ngan. |
-| "P0 nay minor" | P0 khong minor. Do la dinh nghia cua P0. |
+| "One box is unticked but it does not matter" | Every box is a gate. Tick them all or do not ship. |
+| "I will write the dossier later" | `./init.sh docs` FAILs. And later never comes. |
+| "The diff review costs tokens, skip it" | Cheaper than a P0 in production. |
+| "Ship now, monitor later" | MONITOR is step 10, not an option. |
+| "Small regression, just patch it in place" | Patching in place = no evidence, no dossier. Open a fix feature. |
+| "'Continue F03' is a good enough next step" | The next session will spend half an hour rediscovering. Name the file and the command. |
+| "Short session, skip the handoff" | Compaction does not care how long the session was. |
+| "This P0 is minor" | A P0 is not minor. That is what P0 means. |

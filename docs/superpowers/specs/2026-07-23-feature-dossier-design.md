@@ -1,127 +1,127 @@
-# Design — Feature Dossier cho harness-kit
+# Design — the Feature Dossier for harness-kit
 
-**Ngày:** 2026-07-23
-**Trạng thái:** đã duyệt (chờ implementation plan)
-**Phạm vi:** `harness-kit/template/*` + `README.md`
+**Date:** 2026-07-23
+**Status:** approved (awaiting an implementation plan)
+**Scope:** `harness-kit/template/*` + `README.md`
 
 ---
 
-## 1. Vấn đề
+## 1. The problem
 
-Harness hiện ghi state ở `feature_list.json` (feature nào, done chưa) và `progress.md` (nhật ký + bằng chứng lệnh).
-Cả hai đều **ngắn theo thiết kế**: chúng trả lời "đang ở đâu", không trả lời "F đó rốt cuộc là cái gì, làm sao nó chạy,
-vì sao làm như vậy". Sau vài phiên, muốn hiểu lại một feature thì phải đọc lại code.
+The harness currently records state in `feature_list.json` (which feature, whether it is done) and `progress.md` (a log + command evidence).
+Both are **short by design**: they answer "where are we", not "what is that F really, how does it run,
+why was it built that way". After a few sessions, understanding a feature again means re-reading the code.
 
-**Mục tiêu:** mỗi feature khi hoàn thành để lại đúng một file Markdown đọc-lại-được, phục vụ cả người lẫn agent phiên sau.
+**Goal:** every completed feature leaves behind exactly one re-readable Markdown file, serving both humans and the agent in a later session.
 
-## 2. Quyết định đã chốt
+## 2. Decisions already settled
 
-| Câu hỏi | Chốt |
+| Question | Settled |
 |---|---|
-| Đối tượng đọc | **Một file gộp** — vừa mô tả cho người, vừa chi tiết nội tại cho agent |
-| Thời điểm viết | **Tại SHIP gate** (bước 9 pipeline), sau khi VERIFY + SECURITY + DEVEX pass |
-| Mức ép buộc | **Instruction + check cơ học trong `init.sh`** (không dựa vào trí nhớ agent) |
-| Cách tra cứu | **Quy ước tên + field `doc` trong `feature_list.json`** — không có file index riêng |
+| Audience | **One combined file** — a description for humans plus the internal detail for agents |
+| When it is written | **At the SHIP gate** (pipeline step 9), after VERIFY + SECURITY + DEVEX pass |
+| How it is enforced | **Instructions + a mechanical check in `init.sh`** (never relying on the agent's memory) |
+| How it is looked up | **A naming convention + the `doc` field in `feature_list.json`** — no separate index file |
 
-**Cố ý KHÔNG làm (YAGNI):** không `docs/features/INDEX.md`; không script sinh skeleton;
-không tách docs-người / docs-agent thành 2 file; không check độ mới (staleness) của dossier.
+**Deliberately NOT doing (YAGNI):** no `docs/features/INDEX.md`; no skeleton-generating script;
+no splitting human-docs from agent-docs into 2 files; no staleness check on the dossier.
 
-## 3. Quy ước file
+## 3. File convention
 
-- Đường dẫn: `docs/features/<ID>-<slug>.md` — ví dụ `docs/features/F01-scaffold.md`.
-  `<ID>` khớp `id` trong `feature_list.json`; `<slug>` là kebab-case của `name`.
-- Mỗi feature đúng **một** file. Không gộp nhiều F, không tách một F ra nhiều file.
-- Template gốc: `docs/features/_TEMPLATE.md` (bootstrap copy sẵn vào project; không bị check quét vì tên bắt đầu bằng `_`).
+- Path: `docs/features/<ID>-<slug>.md` — for example `docs/features/F01-scaffold.md`.
+  `<ID>` matches `id` in `feature_list.json`; `<slug>` is the kebab-case of `name`.
+- Exactly **one** file per feature. Never merge several Fs, never split one F across files.
+- The source template: `docs/features/_TEMPLATE.md` (bootstrap copies it in; it is exempt from the scan because its name starts with `_`).
 
-## 4. Cấu trúc dossier — 8 mục cố định
+## 4. Dossier structure — 8 fixed sections
 
-Heading cấp 2, đúng thứ tự, **đúng chữ**. Mục không áp dụng thì ghi `—` chứ **không xoá heading**
-(check cơ học bám vào heading).
+Level-2 headings, in order, **worded exactly**. A section that does not apply gets `—`, the heading is **never deleted**
+(the mechanical check anchors on the headings).
 
-Header đầu file:
+The header at the top of the file:
 
 ```markdown
 # F01 — Scaffold project
 
-> **Status:** done · **Ngày:** 2026-07-23 · **Commit:** a1b2c3d · **Blueprint:** §2.1
+> **Status:** done · **Date:** 2026-07-23 · **Commit:** a1b2c3d · **Blueprint:** §2.1
 ```
 
-(Trong `_TEMPLATE.md` các giá trị này là `<TODO: ...>`.)
+(In `_TEMPLATE.md` these values are `<TODO: ...>`.)
 
-| # | Heading | Trả lời | Cho ai |
+| # | Heading | Answers | For whom |
 |---|---|---|---|
-| 1 | `## 1. Ý nghĩa với dự án` | Vai trò của F trong bức tranh chung; nó **unlock** gì (F nào dựa vào nó); không có nó thì dự án **thiếu** gì; cover REQ nào của Blueprint | cả hai |
-| 2 | `## 2. Làm được gì` | Hành vi quan sát được: bấm/gọi gì thì ra gì | người |
-| 3 | `## 3. Cách dùng` | Bước cụ thể / endpoint / màn hình / lệnh + ví dụ thật (request→response nếu là API) | người |
-| 4 | `## 4. Bên trong` | Luồng chính A→B→C; **files touched** (path + vai trò 1 dòng); schema/bảng đụng tới; biến env/config cần | agent |
-| 5 | `## 5. Quyết định & trade-off` | Chọn gì, bỏ gì, vì sao; cái gì **cố ý không làm** (out of scope) | cả hai |
-| 6 | `## 6. Cạm bẫy khi sửa` | Chỗ dễ vỡ, invariant phải giữ, phụ thuộc ngầm | agent |
-| 7 | `## 7. Bằng chứng` | Từng `done_when` → cách verify → kết quả; kết quả SECURITY gate. Output dài để ở `progress.md`, đây chỉ tóm tắt + trỏ | cả hai |
-| 8 | `## 8. Cập nhật` | Dòng có ngày, ghi khi F sau đổi hành vi F này | cả hai |
+| 1 | `## 1. Why it matters` | The F's role in the bigger picture; what it **unlocks** (which Fs build on it); what the project would **lack** without it; which Blueprint REQ it covers | both |
+| 2 | `## 2. What it does` | Observable behaviour: press/call what, get what | humans |
+| 3 | `## 3. How to use it` | Concrete steps / endpoint / screen / command + a real example (request→response if it is an API) | humans |
+| 4 | `## 4. Under the hood` | The main flow A→B→C; **files touched** (path + a one-line role); schema/tables involved; env/config variables needed | agents |
+| 5 | `## 5. Decisions & trade-offs` | What was chosen, what was dropped, why; what was **deliberately not done** (out of scope) | both |
+| 6 | `## 6. Pitfalls when editing` | What breaks easily, invariants to preserve, hidden dependencies | agents |
+| 7 | `## 7. Evidence` | Each `done_when` → how it was verified → the result; the SECURITY gate result. Long output stays in `progress.md`; this is a summary + a pointer | both |
+| 8 | `## 8. Updates` | A dated line, written whenever a later F changes this F's behaviour | both |
 
-**Ranh giới mục 1 vs mục 2** (ghi thẳng vào `_TEMPLATE.md` dạng chú thích để agent không viết trùng):
-mục 1 **zoom out** — vai trò trong hệ thống; mục 2 **zoom in** — hành vi cụ thể.
+**The boundary between section 1 and section 2** (written directly into `_TEMPLATE.md` as a comment so the agent does not duplicate):
+section 1 **zooms out** — the role in the system; section 2 **zooms in** — the concrete behaviour.
 
-Mục 1 tận dụng dữ liệu có sẵn trong `feature_list.json`: `dependencies` (F này cần gì) và chiều ngược lại
-(F nào khai báo phụ thuộc nó) — agent điền được ngay, không phải suy đoán.
+Section 1 makes use of data already in `feature_list.json`: `dependencies` (what this F needs) and the reverse direction
+(which Fs declare a dependency on it) — the agent can fill it in immediately, with no guesswork.
 
-## 5. Ràng buộc — 6 chỗ sửa trong template
+## 5. Constraints — 6 edits in the template
 
-### 5.1 File mới: `template/docs/features/_TEMPLATE.md`
-Skeleton 8 mục + header, kèm chú thích hướng dẫn ngắn dưới mỗi heading dưới dạng `<!-- ... -->`, và chỗ cần điền
-đánh dấu `<TODO: ...>`. Bootstrap tự copy (`walk()` đã quét toàn bộ `template/`), không cần sửa `bootstrap.mjs`.
+### 5.1 New file: `template/docs/features/_TEMPLATE.md`
+An 8-section skeleton + the header, with short guidance comments under each heading as `<!-- ... -->`, and every blank
+marked `<TODO: ...>`. Bootstrap copies it automatically (`walk()` already scans all of `template/`), so `bootstrap.mjs` needs no changes.
 
-### 5.2 `template/init.sh` — target `docs`
-- Thêm hàm `check_docs()`; thêm `docs` vào `case` và vào nhánh `all`.
-- Parse `feature_list.json` bằng `node -e` (node vốn đã là yêu cầu của harness: bootstrap + `.claude/workflows/*.mjs`).
-  Không có `node` → in `(khong co node — skip)`, **không** set FAIL và **không** in "OK" (không giả vờ pass).
-- Luật: với mọi feature có `status ∈ {done, verified}`:
-  1. có field `doc` (string, không rỗng);
-  2. file `doc` tồn tại;
-  3. chứa đủ 8 heading `## 1.` … `## 8.` đúng thứ tự;
-  4. không còn placeholder chưa điền. Marker placeholder là **`<TODO:` … `>`** (do `_TEMPLATE.md` quy định) —
-     check grep đúng chuỗi `<TODO:`, không grep `<...>` chung chung để tránh báo nhầm code snippet / thẻ HTML.
-     Chú thích hướng dẫn trong template dùng `<!-- ... -->` và cũng bị tính là chưa điền nếu còn sót.
-- Vi phạm bất kỳ → in `[FAIL]` kèm feature id + lý do, `FAIL=1`.
-- Feature `pending / in_progress / blocked / deferred` → bỏ qua (chưa cần dossier).
+### 5.2 `template/init.sh` — the `docs` target
+- Add a `check_docs()` function; add `docs` to the `case` and to the `all` branch.
+- Parse `feature_list.json` with `node -e` (node is already a harness requirement: bootstrap + `.claude/workflows/*.mjs`).
+  No `node` → print `(no node — skip)`, do **not** set FAIL and do **not** print "OK" (never fake a pass).
+- The rule: for every feature with `status ∈ {done, verified}`:
+  1. it has a `doc` field (a non-empty string);
+  2. the `doc` file exists;
+  3. it contains all 8 headings `## 1.` … `## 8.` in order;
+  4. no placeholder is left unfilled. The placeholder marker is **`<TODO:` … `>`** (defined by `_TEMPLATE.md`) —
+     grep for the exact string `<TODO:`, never a generic `<...>`, to avoid false positives on code snippets / HTML tags.
+     The guidance comments in the template use `<!-- ... -->` and also count as unfilled if left behind.
+- Any violation → print `[FAIL]` with the feature id + the reason, and set `FAIL=1`.
+- Features in `pending / in_progress / blocked / deferred` → skipped (no dossier needed yet).
 
 ### 5.3 `template/CLAUDE.md`
-- **Source of truth:** thêm dòng trỏ `docs/features/<ID>-<slug>.md` — "hồ sơ từng feature đã xong; đọc trước khi sửa F cũ".
-- **Definition of Done:** thêm bậc `documented` = có dossier đủ 8 mục, `./init.sh docs` xanh.
-- **Startup Workflow:** bước đọc state → nếu sắp sửa một F đã done, đọc dossier của nó trước.
-- **End of Session:** nhắc dossier nằm trong state phải cập nhật.
+- **Source of truth:** add a line pointing at `docs/features/<ID>-<slug>.md` — "the record of each finished feature; read it before editing an old F".
+- **Definition of Done:** add the `documented` tier = a dossier with all 8 sections, `./init.sh docs` green.
+- **Startup Workflow:** in the read-the-state step → if you are about to edit an already-done F, read its dossier first.
+- **End of Session:** remind that the dossier is part of the state that must be updated.
 
 ### 5.4 `template/.claude/workflow/pipeline.md`
-- Mục **9. SHIP** — thêm checkbox bắt buộc:
-  `[ ] Feature dossier docs/features/<ID>-<slug>.md đầy đủ 8 mục; ./init.sh docs xanh; feature_list.json có field doc.`
-- Thêm luật lan tỏa: **F mới đổi hành vi F cũ → phải thêm dòng vào mục 8 (Cập nhật) của dossier F cũ**, ngay trong SHIP của F mới.
-- Mục **Checkpoint gates** — `SHIP→next` bổ sung "dossier đã ghi".
+- Section **9. SHIP** — add a required checkbox:
+  `[ ] The feature dossier docs/features/<ID>-<slug>.md has all 8 sections; ./init.sh docs is green; feature_list.json has the doc field.`
+- Add the ripple rule: **a new F that changes an old F's behaviour → must add a line to section 8 (Updates) of the old F's dossier**, inside the new F's SHIP.
+- The **Checkpoint gates** section — `SHIP→next` gains "the dossier is written".
 
 ### 5.5 `template/feature_list.json`
-- Ba feature mẫu F01/F02/F03 thêm field `"doc"` với đường dẫn theo quy ước.
-- `_howto` bổ sung: `doc` = đường dẫn dossier, bắt buộc khi status done/verified; `init.sh docs` sẽ check.
+- The three sample features F01/F02/F03 gain a `"doc"` field with the conventional path.
+- `_howto` gains: `doc` = the dossier path, required once status is done/verified; `init.sh docs` will check it.
 
 ### 5.6 `README.md` (harness-kit)
-- Cây "Cấu trúc bộ kit": thêm `docs/features/_TEMPLATE.md`.
-- Bảng "5 subsystem": dossier thuộc **State** (cùng `feature_list.json`, `progress.md`).
-- Mục "Sau khi bootstrap": nhắc dossier sinh dần khi ship từng F, không phải điền trước.
+- The "Layout of the kit" tree: add `docs/features/_TEMPLATE.md`.
+- The "5 subsystems" table: the dossier belongs to **State** (alongside `feature_list.json`, `progress.md`).
+- The "After bootstrapping" section: note that dossiers accumulate as each F ships, they are not filled in up front.
 
-## 6. Tiêu chí hoàn thành
+## 6. Completion criteria
 
-- [ ] `_TEMPLATE.md` tồn tại, đủ 8 mục, có chú thích ranh giới mục 1 vs mục 2.
-- [ ] `./init.sh docs` **FAIL** khi một feature `done` thiếu `doc` / thiếu file / thiếu heading / còn placeholder.
-- [ ] `./init.sh docs` **PASS** khi mọi feature `done` có dossier hợp lệ, và khi chưa feature nào `done`.
-- [ ] `./init.sh all` chạy được `check_docs` và không vỡ các check cũ.
-- [ ] `node bootstrap.mjs --dry-run` liệt kê `docs/features/_TEMPLATE.md`.
-- [ ] Bootstrap vào thư mục trống → `docs/features/_TEMPLATE.md` có mặt, token `{{...}}` đã thay hết.
-- [ ] `validate-harness.mjs` vẫn **100/100**.
-- [ ] `README.md` + `CLAUDE.md` + `pipeline.md` + `feature_list.json` mô tả nhất quán cùng một quy ước.
+- [ ] `_TEMPLATE.md` exists, has all 8 sections, and carries the section 1 vs section 2 boundary comment.
+- [ ] `./init.sh docs` **FAILs** when a `done` feature is missing `doc` / the file / a heading / still has a placeholder.
+- [ ] `./init.sh docs` **PASSes** when every `done` feature has a valid dossier, and when no feature is `done` yet.
+- [ ] `./init.sh all` runs `check_docs` without breaking the existing checks.
+- [ ] `node bootstrap.mjs --dry-run` lists `docs/features/_TEMPLATE.md`.
+- [ ] Bootstrapping into an empty directory → `docs/features/_TEMPLATE.md` is present with every `{{...}}` token replaced.
+- [ ] `validate-harness.mjs` still scores **100/100**.
+- [ ] `README.md` + `CLAUDE.md` + `pipeline.md` + `feature_list.json` describe one consistent convention.
 
-## 7. Rủi ro
+## 7. Risks
 
-| Rủi ro | Xử lý |
+| Risk | Mitigation |
 |---|---|
-| Target project không có `node` → check im lặng bỏ qua | In rõ dòng skip, không in "OK"; ghi trong `README.md` rằng node là yêu cầu của harness |
-| Agent viết dossier hình thức, đủ heading nhưng rỗng nghĩa | Check bắt marker `<TODO:` và `<!-- -->` còn sót; chất lượng nội dung do SHIP gate người duyệt |
-| Dossier lệch với code sau vài F | Luật mục 8 (Cập nhật) trong pipeline; cố ý không làm staleness check (YAGNI) |
-| Mục 1 và mục 2 viết trùng nhau | Chú thích ranh giới zoom-out/zoom-in ngay trong `_TEMPLATE.md` |
+| The target project has no `node` → the check silently skips | Print an explicit skip line, never print "OK"; document in `README.md` that node is a harness requirement |
+| The agent writes a hollow dossier — all headings present, no meaning | The check catches leftover `<TODO:` and `<!-- -->` markers; content quality is the human's call at the SHIP gate |
+| The dossier drifts from the code after a few Fs | The section 8 (Updates) rule in the pipeline; deliberately no staleness check (YAGNI) |
+| Sections 1 and 2 end up saying the same thing | The zoom-out/zoom-in boundary comment sits right inside `_TEMPLATE.md` |

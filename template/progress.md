@@ -1,25 +1,25 @@
 # Progress — {{PROJECT_NAME}}
 
-> Cập nhật mỗi khi feature đổi trạng thái. `done` phải kèm **bằng chứng** (output lệnh/test).
+> Update this whenever a feature changes state. `done` must come with **evidence** (command/test output).
 
 ## Current State
 - **Last Updated:** {{DATE}}.
-- **Phase:** BLUEPRINT xong → sẵn sàng BUILD.  _(cập nhật khi tiến)_
+- **Phase:** BLUEPRINT finished → ready to BUILD.  _(update as you progress)_
 - **Current Objective / Active feature:** `F01` (pending).
-- **What đã build:** chưa gì (repo mới có harness).
-- **Blockers:** _(liệt kê thứ đợi Homeowner — keys, quyết định...)_
-- **Recommended Next Step:** scaffold theo Blueprint → `./init.sh scaffold`.
+- **What has been built:** nothing yet (the repo only has the harness).
+- **Blockers:** _(list what is waiting on the Homeowner — keys, decisions...)_
+- **Recommended Next Step:** scaffold per the Blueprint → `./init.sh scaffold`.
 
-## Feature board (nguồn: feature_list.json)
+## Feature board (source: feature_list.json)
 | ID | Feature | Deps | Status |
 |----|---------|------|--------|
 | F01 | Scaffold | — | pending ◀ active |
 | F02 | Data layer | F01 | pending |
 | F03 | Auth | F01,F02 | pending |
 
-## Nhật ký (mới nhất trên cùng)
+## Log (newest first)
 ### {{DATE}} — Harness setup
-- Dựng harness từ harness-kit template. Chưa có code sản phẩm.
+- Stood up the harness from the harness-kit template. No product code yet.
 
-## Verification Evidence (command and output — dán vào đây khi có)
-_(trống — chưa build)_
+## Verification Evidence (command and output — paste it here as it arrives)
+_(empty — nothing built yet)_

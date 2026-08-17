@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Test suite — harness-kit. Chay: bash tests/run-tests.sh
-# Yeu cau: bash + node. Moi scenario bootstrap mot project tam vao .tmp-tests/ roi assert exit code.
+# Test suite — harness-kit. Run: bash tests/run-tests.sh
+# Requires: bash + node. Each scenario bootstraps a throwaway project into .tmp-tests/ then asserts the exit code.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 KIT="$PWD"
@@ -14,14 +14,14 @@ trap cleanup EXIT
 ok() { echo "  PASS  $1"; PASSED=$((PASSED + 1)); }
 ng() { echo "  FAIL  $1"; FAILED=$((FAILED + 1)); }
 
-# Doi duong dan POSIX -> dang node hieu tren Windows (Git Bash). Ngoai Windows: giu nguyen.
+# Convert a POSIX path -> the form node understands on Windows (Git Bash). Elsewhere: unchanged.
 win() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf %s "$1"; fi
 }
 
-# Bootstrap mot project tam, in ra duong dan POSIX cua no.
-# Dung mktemp chu khong dung bien dem: ham nay luon chay trong $(...) nen subshell,
-# bien dem tang trong subshell se khong giu duoc -> moi project se trung duong dan.
+# Bootstrap a throwaway project and print its POSIX path.
+# Uses mktemp rather than a counter variable: this function always runs inside $(...), i.e. a
+# subshell, so a counter incremented there would not survive -> every project would collide on the same path.
 new_project() {
   mkdir -p "$KIT/.tmp-tests"
   local d
@@ -31,7 +31,7 @@ new_project() {
   echo "$d"
 }
 
-# patch_feature <proj> <feature-id> <json-object>   — merge vao feature; gia tri null = xoa field.
+# patch_feature <proj> <feature-id> <json-object>   — merged into the feature; a null value deletes the field.
 patch_feature() {
   node -e '
 const fs = require("fs");
@@ -45,53 +45,53 @@ fs.writeFileSync(file, JSON.stringify(j, null, 2));
 ' "$(win "$1")" "$2" "$3"
 }
 
-# In ra mot dossier hop le (du 8 muc, khong placeholder).
+# Print a valid dossier (all 8 sections, no placeholders).
 valid_dossier() {
   cat <<'MD'
 # F01 — Scaffold project
 
-> **Status:** done · **Ngày:** 2026-07-23 · **Commit:** a1b2c3d · **Blueprint:** §1
+> **Status:** done · **Date:** 2026-07-23 · **Commit:** a1b2c3d · **Blueprint:** §1
 
-## 1. Ý nghĩa với dự án
-Đặt nền cho mọi feature sau; F02 và F03 đều dựa vào nó.
+## 1. Why it matters
+Lays the foundation for every later feature; both F02 and F03 build on it.
 
-## 2. Làm được gì
-Repo build rỗng chạy được từ máy sạch.
+## 2. What it does
+An empty build of the repo runs from a clean machine.
 
-## 3. Cách dùng
+## 3. How to use it
 `npm install && npm run build`
 
-## 4. Bên trong
-`package.json` — khai báo script build/lint/test.
+## 4. Under the hood
+`package.json` — declares the build/lint/test scripts.
 
-## 5. Quyết định & trade-off
-Chọn npm thay pnpm cho đơn giản; không thêm monorepo tooling.
+## 5. Decisions & trade-offs
+Chose npm over pnpm for simplicity; no monorepo tooling added.
 
-## 6. Cạm bẫy khi sửa
-Đổi tên script build phải đổi luôn `init.sh`.
+## 6. Pitfalls when editing
+Renaming the build script means updating `init.sh` too.
 
-## 7. Bằng chứng
+## 7. Evidence
 `./init.sh scaffold` → VERIFY OK (scaffold).
 
-## 8. Cập nhật
-2026-07-23 — tạo mới.
+## 8. Updates
+2026-07-23 — created.
 MD
 }
 
-# expect_docs <mo-ta> <exit-code-mong-doi> <proj>
+# expect_docs <description> <expected-exit-code> <proj>
 expect_docs() {
   local desc="$1" want="$2" proj="$3" got
   bash "$proj/init.sh" docs >/dev/null 2>&1
   got=$?
-  if [ "$got" -eq "$want" ]; then ok "$desc"; else ng "$desc (exit=$got, mong=$want)"; fi
+  if [ "$got" -eq "$want" ]; then ok "$desc"; else ng "$desc (exit=$got, want=$want)"; fi
 }
 
-# expect_all <mo-ta> <exit-code-mong-doi> <proj>
+# expect_all <description> <expected-exit-code> <proj>
 expect_all() {
   local desc="$1" want="$2" proj="$3" got
   bash "$proj/init.sh" all >/dev/null 2>&1
   got=$?
-  if [ "$got" -eq "$want" ]; then ok "$desc"; else ng "$desc (exit=$got, mong=$want)"; fi
+  if [ "$got" -eq "$want" ]; then ok "$desc"; else ng "$desc (exit=$got, want=$want)"; fi
 }
 
 DOC="docs/features/F01-scaffold.md"
@@ -99,51 +99,51 @@ DOC="docs/features/F01-scaffold.md"
 echo "== check_docs =="
 
 P="$(new_project)"
-expect_docs "chua feature nao done -> pass" 0 "$P"
+expect_docs "no feature done yet -> pass" 0 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 '{"status":"done","doc":null}'
-expect_docs "done nhung thieu field doc -> fail" 1 "$P"
+expect_docs "done but missing the doc field -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 rm -f "$P/$DOC"
-expect_docs "doc tro toi file khong ton tai -> fail" 1 "$P"
+expect_docs "doc points at a nonexistent file -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 mkdir -p "$P/docs/features"
 valid_dossier | sed '/^## 6\./,$d' > "$P/$DOC"
-expect_docs "thieu muc 6-8 -> fail" 1 "$P"
+expect_docs "sections 6-8 missing -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 mkdir -p "$P/docs/features"
 valid_dossier | sed -e 's/^## 2\./## X./' -e 's/^## 8\./## 2./' -e 's/^## X\./## 8./' > "$P/$DOC"
-expect_docs "8 muc sai thu tu -> fail" 1 "$P"
+expect_docs "8 sections in the wrong order -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 mkdir -p "$P/docs/features"
-{ valid_dossier; echo "<TODO: dien not phan nay>"; } > "$P/$DOC"
-expect_docs "con placeholder <TODO: -> fail" 1 "$P"
+{ valid_dossier; echo "<TODO: fill in this part>"; } > "$P/$DOC"
+expect_docs "a <TODO: placeholder is left -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 mkdir -p "$P/docs/features"
-{ valid_dossier; printf '%s\n' "<!-- huong dan chua xoa -->"; } > "$P/$DOC"
-expect_docs "con chu thich HTML -> fail" 1 "$P"
+{ valid_dossier; printf '%s\n' "<!-- guidance not removed -->"; } > "$P/$DOC"
+expect_docs "an HTML comment is left -> fail" 1 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"done\",\"doc\":\"$DOC\"}"
 mkdir -p "$P/docs/features"
 valid_dossier > "$P/$DOC"
-expect_docs "dossier hop le -> pass" 0 "$P"
+expect_docs "a valid dossier -> pass" 0 "$P"
 
 P="$(new_project)"
 patch_feature "$P" F01 "{\"status\":\"verified\",\"doc\":\"$DOC\"}"
 rm -f "$P/$DOC"
-expect_all "status verified thieu dossier -> ./init.sh all fail" 1 "$P"
+expect_all "status verified with no dossier -> ./init.sh all fails" 1 "$P"
 
 echo ""
 echo "== _TEMPLATE.md =="
@@ -151,25 +151,25 @@ echo "== _TEMPLATE.md =="
 P="$(new_project)"
 T="$P/docs/features/_TEMPLATE.md"
 
-if [ -f "$T" ]; then ok "bootstrap copy docs/features/_TEMPLATE.md"; else ng "bootstrap copy docs/features/_TEMPLATE.md"; fi
+if [ -f "$T" ]; then ok "bootstrap copies docs/features/_TEMPLATE.md"; else ng "bootstrap copies docs/features/_TEMPLATE.md"; fi
 
 nums="$(grep -E '^##[[:space:]]+[1-8]\.' "$T" 2>/dev/null \
   | sed -E 's/^##[[:space:]]+([1-8])\..*/\1/' | tr '\n' ',' | sed 's/,$//')"
 if [ "$nums" = "1,2,3,4,5,6,7,8" ]; then
-  ok "_TEMPLATE.md du 8 muc dung thu tu"
+  ok "_TEMPLATE.md has all 8 sections in order"
 else
-  ng "_TEMPLATE.md 8 muc dung thu tu (dang co: ${nums:-khong co})"
+  ng "_TEMPLATE.md has all 8 sections in order (currently: ${nums:-none})"
 fi
 
-if grep -q '<TODO:' "$T" 2>/dev/null; then ok "_TEMPLATE.md dung marker <TODO:"; else ng "_TEMPLATE.md thieu marker <TODO:"; fi
-if grep -q '<!--' "$T" 2>/dev/null; then ok "_TEMPLATE.md co chu thich huong dan"; else ng "_TEMPLATE.md thieu chu thich huong dan"; fi
+if grep -q '<TODO:' "$T" 2>/dev/null; then ok "_TEMPLATE.md uses the <TODO: marker"; else ng "_TEMPLATE.md is missing the <TODO: marker"; fi
+if grep -q '<!--' "$T" 2>/dev/null; then ok "_TEMPLATE.md carries guidance comments"; else ng "_TEMPLATE.md is missing guidance comments"; fi
 if grep -q 'zoom out' "$T" 2>/dev/null && grep -q 'zoom in' "$T" 2>/dev/null; then
-  ok "_TEMPLATE.md giai thich ranh gioi muc 1 vs muc 2"
+  ok "_TEMPLATE.md explains the section 1 vs section 2 boundary"
 else
-  ng "_TEMPLATE.md giai thich ranh gioi muc 1 vs muc 2"
+  ng "_TEMPLATE.md explains the section 1 vs section 2 boundary"
 fi
 
-expect_docs "_TEMPLATE.md khong bi quet (khong feature nao tro toi) -> pass" 0 "$P"
+expect_docs "_TEMPLATE.md is not scanned (no feature points at it) -> pass" 0 "$P"
 
 echo ""
 echo "== feature_list.json =="
@@ -180,27 +180,27 @@ missing="$(node -e '
 const j = require(process.argv[1] + "/feature_list.json");
 console.log(j.features.filter(f => !f.doc).map(f => f.id).join(","));
 ' "$(win "$P")")"
-if [ -z "$missing" ]; then ok "moi feature mau co field doc"; else ng "feature thieu doc: $missing"; fi
+if [ -z "$missing" ]; then ok "every sample feature has a doc field"; else ng "features missing doc: $missing"; fi
 
 wrong="$(node -e '
 const j = require(process.argv[1] + "/feature_list.json");
 const bad = j.features.filter(f => !new RegExp("^docs/features/" + f.id + "-[a-z0-9-]+\\.md$").test(f.doc || ""));
 console.log(bad.map(f => f.id).join(","));
 ' "$(win "$P")")"
-if [ -z "$wrong" ]; then ok "doc dung quy uoc docs/features/<ID>-<slug>.md"; else ng "doc sai quy uoc: $wrong"; fi
+if [ -z "$wrong" ]; then ok "doc follows the docs/features/<ID>-<slug>.md convention"; else ng "doc breaks the convention: $wrong"; fi
 
 noverify="$(node -e '
 const j = require(process.argv[1] + "/feature_list.json");
 const bad = j.features.filter(f => !(f.verify || []).includes("./init.sh docs"));
 console.log(bad.map(f => f.id).join(","));
 ' "$(win "$P")")"
-if [ -z "$noverify" ]; then ok "feature mau co ./init.sh docs trong verify"; else ng "thieu ./init.sh docs trong verify: $noverify"; fi
+if [ -z "$noverify" ]; then ok "sample features have ./init.sh docs in verify"; else ng "missing ./init.sh docs in verify: $noverify"; fi
 
 hint="$(node -e '
 const j = require(process.argv[1] + "/feature_list.json");
 console.log(String(j._howto || "").includes("doc") ? "yes" : "no");
 ' "$(win "$P")")"
-if [ "$hint" = "yes" ]; then ok "_howto giai thich field doc"; else ng "_howto giai thich field doc"; fi
+if [ "$hint" = "yes" ]; then ok "_howto explains the doc field"; else ng "_howto explains the doc field"; fi
 
 echo ""
 echo "== instruction wiring =="
@@ -208,60 +208,61 @@ echo "== instruction wiring =="
 C="$KIT/template/CLAUDE.md"
 PL="$KIT/template/.claude/workflow/pipeline.md"
 
-has() { # has <mo-ta> <file> <pattern>
-  if grep -qF "$3" "$2" 2>/dev/null; then ok "$1"; else ng "$1 (khong thay: $3)"; fi
+has() { # has <description> <file> <pattern>
+  if grep -qF "$3" "$2" 2>/dev/null; then ok "$1"; else ng "$1 (not found: $3)"; fi
 }
 
-has "CLAUDE.md tro toi docs/features/"        "$C"  "docs/features/"
-has "CLAUDE.md nhac _TEMPLATE.md"             "$C"  "_TEMPLATE.md"
-has "CLAUDE.md co lenh ./init.sh docs"        "$C"  "./init.sh docs"
-has "CLAUDE.md DoD co bac documented"         "$C"  "documented"
-has "pipeline.md SHIP nhac dossier"           "$PL" "dossier"
-has "pipeline.md co lenh ./init.sh docs"      "$PL" "./init.sh docs"
-has "pipeline.md co luat cap nhat F cu"       "$PL" "mục 8"
+has "CLAUDE.md points at docs/features/"        "$C"  "docs/features/"
+has "CLAUDE.md mentions _TEMPLATE.md"           "$C"  "_TEMPLATE.md"
+has "CLAUDE.md carries the ./init.sh docs command" "$C" "./init.sh docs"
+has "CLAUDE.md DoD has a documented tier"       "$C"  "documented"
+has "pipeline.md SHIP mentions the dossier"     "$PL" "dossier"
+has "pipeline.md carries the ./init.sh docs command" "$PL" "./init.sh docs"
+has "pipeline.md has the rule for updating an old F" "$PL" "section 8"
 
-# Anchor tieng Anh phai con nguyen (validate-harness.mjs dua vao day)
+# The English anchors must stay intact (validate-harness.mjs relies on them)
 for a in "Startup Workflow" "Verification Commands" "Definition of Done" "End of Session"; do
-  has "CLAUDE.md giu anchor: $a" "$C" "$a"
+  has "CLAUDE.md keeps the anchor: $a" "$C" "$a"
 done
 
 echo ""
 echo "== README + e2e =="
 
 R="$KIT/README.md"
-if grep -qF "_TEMPLATE.md" "$R"; then ok "README liet ke _TEMPLATE.md trong cay thu muc"; else ng "README liet ke _TEMPLATE.md"; fi
-if grep -qF "dossier" "$R"; then ok "README giai thich dossier"; else ng "README giai thich dossier"; fi
+if grep -qF "_TEMPLATE.md" "$R"; then ok "README lists _TEMPLATE.md in the directory tree"; else ng "README lists _TEMPLATE.md"; fi
+if grep -qF "dossier" "$R"; then ok "README explains the dossier"; else ng "README explains the dossier"; fi
 
-# Luu y: gom output vao bien roi moi grep. Neu pipe thang vao `grep -q`, grep thoat som
-# -> lenh dau pipe an SIGPIPE -> `set -o pipefail` bao non-zero, test fail oan.
+# Note: collect the output into a variable, then grep. Piping straight into `grep -q` makes grep
+# exit early -> the command upstream of the pipe takes SIGPIPE -> `set -o pipefail` reports
+# non-zero -> the test fails for the wrong reason.
 
-# bootstrap --dry-run phai liet ke file template moi
+# bootstrap --dry-run must list the new template files
 P="$KIT/.tmp-tests/dry"
 rm -rf "$P"; mkdir -p "$P"
 out="$(node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "Dry" --dry-run 2>&1)"
 if printf '%s' "$out" | grep -qE 'docs[\\/]features[\\/]_TEMPLATE\.md'; then
-  ok "bootstrap --dry-run liet ke docs/features/_TEMPLATE.md"
+  ok "bootstrap --dry-run lists docs/features/_TEMPLATE.md"
 else
-  ng "bootstrap --dry-run liet ke docs/features/_TEMPLATE.md"
+  ng "bootstrap --dry-run lists docs/features/_TEMPLATE.md"
 fi
 
-# ./init.sh all phai chay khoi FEATURE DOCS
+# ./init.sh all must run the FEATURE DOCS block
 P="$(new_project)"
 out="$(bash "$P/init.sh" all 2>&1)"
 if printf '%s' "$out" | grep -qF "FEATURE DOCS"; then
-  ok "./init.sh all co chay check_docs"
+  ok "./init.sh all does run check_docs"
 else
-  ng "./init.sh all co chay check_docs"
+  ng "./init.sh all does run check_docs"
 fi
 
 echo ""
-echo "== check_build: script fail phai chan gate =="
+echo "== check_build: a failing script must block the gate =="
 
-# Truoc day `npm run lint 2>/dev/null || echo "(no lint script)"` gop hai truong hop khac han
-# nhau lam mot: script THIEU va script CHAY-ROI-FAIL. Ket qua la lint do van di qua gate.
-# Nhom test nay khoa lai hanh vi do.
+# The old `npm run lint 2>/dev/null || echo "(no lint script)"` conflated two very different
+# cases: a MISSING script and a script that RAN AND FAILED. The result was that a red lint
+# still passed the gate. This group of tests pins that behaviour down.
 
-# mkpkg <proj> <json-scripts>  — viet package.json voi scripts cho truoc
+# mkpkg <proj> <json-scripts>  — write a package.json with the given scripts
 mkpkg() {
   node -e '
 const fs = require("fs");
@@ -270,99 +271,99 @@ fs.writeFileSync(process.argv[1] + "/package.json",
 ' "$(win "$1")" "$2"
 }
 
-# Baseline: build xanh, khong co lint/test -> phai PASS nhung bao SKIP.
+# Baseline: build green, no lint/test -> must PASS but report SKIP.
 P="$(new_project)"
 mkpkg "$P" '{"build":"node -e \"0\""}'
 out="$(bash "$P/init.sh" build 2>&1)"; rc=$?
-if [ "$rc" -eq 0 ]; then ok "build xanh -> exit 0"; else ng "build xanh -> exit 0 (rc=$rc)"; fi
-if printf '%s' "$out" | grep -qF 'SKIP: khong co script "lint"'; then
-  ok "thieu lint -> bao SKIP (khong gia vo pass)"
+if [ "$rc" -eq 0 ]; then ok "build green -> exit 0"; else ng "build green -> exit 0 (rc=$rc)"; fi
+if printf '%s' "$out" | grep -qF 'SKIP: no "lint" script'; then
+  ok "no lint -> reported as SKIP (not faked as a pass)"
 else
-  ng "thieu lint -> bao SKIP"
+  ng "no lint -> reported as SKIP"
 fi
-if printf '%s' "$out" | grep -qF 'check bi SKIP'; then
-  ok "summary noi ro con check bi SKIP"
+if printf '%s' "$out" | grep -qF 'were SKIPped'; then
+  ok "the summary says plainly that checks were SKIPped"
 else
-  ng "summary noi ro con check bi SKIP"
+  ng "the summary says plainly that checks were SKIPped"
 fi
 
-# Hard case: lint FAIL. Truoc kia bi nuot thanh "(no lint script)" va gate van xanh.
+# Hard case: lint FAILS. This used to be swallowed into "(no lint script)" and the gate stayed green.
 P="$(new_project)"
 mkpkg "$P" '{"lint":"node -e \"process.exit(1)\"","build":"node -e \"0\""}'
 out="$(bash "$P/init.sh" build 2>&1)"; rc=$?
-if [ "$rc" -ne 0 ]; then ok "lint FAIL -> gate do (exit != 0)"; else ng "lint FAIL -> gate do (exit=$rc — lint do van qua duoc gate!)"; fi
-if printf '%s' "$out" | grep -qF '[FAIL] lint'; then ok "lint FAIL -> in ro [FAIL] lint"; else ng "lint FAIL -> in ro [FAIL] lint"; fi
+if [ "$rc" -ne 0 ]; then ok "lint FAIL -> gate red (exit != 0)"; else ng "lint FAIL -> gate red (exit=$rc — a red lint got through the gate!)"; fi
+if printf '%s' "$out" | grep -qF '[FAIL] lint'; then ok "lint FAIL -> prints [FAIL] lint explicitly"; else ng "lint FAIL -> prints [FAIL] lint explicitly"; fi
 
-# typecheck FAIL cung phai chan.
+# A typecheck FAIL must block too.
 P="$(new_project)"
 mkpkg "$P" '{"typecheck":"node -e \"process.exit(1)\"","build":"node -e \"0\""}'
-if bash "$P/init.sh" build >/dev/null 2>&1; then ng "typecheck FAIL -> gate do"; else ok "typecheck FAIL -> gate do"; fi
+if bash "$P/init.sh" build >/dev/null 2>&1; then ng "typecheck FAIL -> gate red"; else ok "typecheck FAIL -> gate red"; fi
 
-# test FAIL cung phai chan (DoD noi 'lint + typecheck + build + test pass').
+# A test FAIL must block too (the DoD says 'lint + typecheck + build + test pass').
 P="$(new_project)"
 mkpkg "$P" '{"build":"node -e \"0\"","test":"node -e \"process.exit(1)\""}'
-if bash "$P/init.sh" build >/dev/null 2>&1; then ng "test FAIL -> gate do"; else ok "test FAIL -> gate do"; fi
+if bash "$P/init.sh" build >/dev/null 2>&1; then ng "test FAIL -> gate red"; else ok "test FAIL -> gate red"; fi
 
-# build la bat buoc: thieu script build -> FAIL, khong phai SKIP.
+# build is required: a missing build script -> FAIL, not SKIP.
 P="$(new_project)"
 mkpkg "$P" '{"lint":"node -e \"0\""}'
 out="$(bash "$P/init.sh" build 2>&1)"
-if printf '%s' "$out" | grep -qF 'thieu script "build"'; then ok "thieu build -> FAIL (khong phai SKIP)"; else ng "thieu build -> FAIL"; fi
+if printf '%s' "$out" | grep -qF 'missing "build" script'; then ok "missing build -> FAIL (not SKIP)"; else ng "missing build -> FAIL"; fi
 
-# Khong co package.json: SKIP that tha, va KHONG duoc bao "moi check deu chay".
+# No package.json: an honest SKIP, and it must NOT claim "all checks ran".
 P="$(new_project)"
 out="$(bash "$P/init.sh" build 2>&1)"
-if printf '%s' "$out" | grep -qF 'KHONG phai pass'; then ok "khong co package.json -> noi ro day khong phai pass"; else ng "khong co package.json -> noi ro day khong phai pass"; fi
-if printf '%s' "$out" | grep -qF 'moi check deu chay'; then ng "khong duoc bao 'moi check deu chay' khi da SKIP"; else ok "khong bao 'moi check deu chay' khi da SKIP"; fi
+if printf '%s' "$out" | grep -qF 'NOT a pass'; then ok "no package.json -> says plainly this is not a pass"; else ng "no package.json -> says plainly this is not a pass"; fi
+if printf '%s' "$out" | grep -qF 'all checks ran'; then ng "must not claim 'all checks ran' when something was SKIPped"; else ok "does not claim 'all checks ran' when something was SKIPped"; fi
 
 echo ""
 echo "== plugin: skills =="
 
-# Moi skill phai co frontmatter hop le. `name` phai khop ten thu muc (Claude Code resolve
-# skill theo do); `description` la thu quyet dinh skill co auto-trigger hay khong — thieu no
-# thi skill nam tren dia va khong bao gio duoc goi.
+# Every skill needs valid frontmatter. `name` must match the directory name (that is how Claude Code
+# resolves a skill); `description` is what decides whether the skill auto-triggers at all — without it
+# the skill sits on disk and never gets invoked.
 SKILL_COUNT=0
 for d in "$KIT"/skills/*/; do
   s="$d/SKILL.md"
   base="$(basename "$d")"
   SKILL_COUNT=$((SKILL_COUNT + 1))
-  if [ ! -f "$s" ]; then ng "skills/$base co SKILL.md"; continue; fi
+  if [ ! -f "$s" ]; then ng "skills/$base has a SKILL.md"; continue; fi
 
-  # frontmatter phai mo o dong 1 va dong o mot dong `---` sau do
+  # the frontmatter must open on line 1 and close on a later `---` line
   if [ "$(head -1 "$s")" = "---" ] && [ "$(sed -n '2,12p' "$s" | grep -c '^---$')" -ge 1 ]; then
-    ok "skills/$base: frontmatter dong/mo dung"
+    ok "skills/$base: frontmatter opens/closes correctly"
   else
-    ng "skills/$base: frontmatter dong/mo dung"
+    ng "skills/$base: frontmatter opens/closes correctly"
   fi
 
   fm_name="$(sed -n '2,12p' "$s" | sed -n 's/^name: *//p' | head -1)"
-  if [ "$fm_name" = "$base" ]; then ok "skills/$base: name khop ten thu muc"
-  else ng "skills/$base: name khop ten thu muc (thay: '$fm_name')"; fi
+  if [ "$fm_name" = "$base" ]; then ok "skills/$base: name matches the directory name"
+  else ng "skills/$base: name matches the directory name (found: '$fm_name')"; fi
 
   fm_desc="$(sed -n '2,12p' "$s" | sed -n 's/^description: *//p' | head -1)"
-  if [ "${#fm_desc}" -ge 40 ]; then ok "skills/$base: description du dai de trigger (${#fm_desc} ky tu)"
-  else ng "skills/$base: description du dai de trigger (${#fm_desc} ky tu, can >=40)"; fi
+  if [ "${#fm_desc}" -ge 40 ]; then ok "skills/$base: description long enough to trigger (${#fm_desc} chars)"
+  else ng "skills/$base: description long enough to trigger (${#fm_desc} chars, need >=40)"; fi
 
-  # Anti-rationalization: day la thu phan biet skill voi mot to checklist.
-  if grep -qiE '^\| Ban nghi \| Thuc te \|' "$s"; then ok "skills/$base: co bang red flags"
-  else ng "skills/$base: co bang red flags"; fi
+  # Anti-rationalization: this is what separates a skill from a checklist.
+  if grep -qiE '^\| You think \| Reality \|' "$s"; then ok "skills/$base: has a red-flags table"
+  else ng "skills/$base: has a red-flags table"; fi
 
-  # Guard chong false-positive. Acceptance test da bat duoc ca: hook im dung nhung agent
-  # van keo skill vao mot repo khong co harness, vi description qua rong.
-  # Hang rao 1: dieu kien tien quyet phai nam trong description (agent doc no truoc than skill).
+  # False-positive guard. The acceptance test already caught this: the hook stayed quiet, but the
+  # agent still pulled the skill into a repo with no harness, because the description was too broad.
+  # Fence 1: the precondition must live in the description (the agent reads it before the body).
   case "$fm_desc" in
-    *"feature_list.json"*) ok "skills/$base: description co dieu kien tien quyet" ;;
-    *) ng "skills/$base: description co dieu kien tien quyet" ;;
+    *"feature_list.json"*) ok "skills/$base: description states the precondition" ;;
+    *) ng "skills/$base: description states the precondition" ;;
   esac
-  # Hang rao 2: than skill phai tu thoat khi khong co harness.
-  if grep -qF '<PRECONDITION>' "$s"; then ok "skills/$base: than skill co bail-out"
-  else ng "skills/$base: than skill co bail-out"; fi
+  # Fence 2: the skill body must bail out when there is no harness.
+  if grep -qF '<PRECONDITION>' "$s"; then ok "skills/$base: body has a bail-out"
+  else ng "skills/$base: body has a bail-out"; fi
 done
 
-if [ "$SKILL_COUNT" -ge 6 ]; then ok "co >=6 gate skill (thay $SKILL_COUNT)"; else ng "co >=6 gate skill (thay $SKILL_COUNT)"; fi
+if [ "$SKILL_COUNT" -ge 6 ]; then ok ">=6 gate skills present (found $SKILL_COUNT)"; else ng ">=6 gate skills present (found $SKILL_COUNT)"; fi
 
-# using-harness phai route toi moi skill con lai — no la thu duy nhat duoc hook bom vao,
-# nen skill nao khong duoc nhac o day thi thuc te khong ai tim ra.
+# using-harness must route to every other skill — it is the only one the hook injects, so a skill
+# that is not mentioned there is effectively undiscoverable.
 U="$KIT/skills/using-harness/SKILL.md"
 missing_route=""
 for d in "$KIT"/skills/*/; do
@@ -370,88 +371,88 @@ for d in "$KIT"/skills/*/; do
   [ "$base" = "using-harness" ] && continue
   grep -qF "$base" "$U" || missing_route="$missing_route $base"
 done
-if [ -z "$missing_route" ]; then ok "using-harness route toi moi skill con lai"
-else ng "using-harness thieu route toi:$missing_route"; fi
+if [ -z "$missing_route" ]; then ok "using-harness routes to every other skill"
+else ng "using-harness is missing routes to:$missing_route"; fi
 
 echo ""
 echo "== plugin: manifest + hook =="
 
 if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(win "$KIT/.claude-plugin/plugin.json")" 2>/dev/null; then
-  ok "plugin.json parse duoc"
+  ok "plugin.json parses"
 else
-  ng "plugin.json parse duoc"
+  ng "plugin.json parses"
 fi
 if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(win "$KIT/hooks/hooks.json")" 2>/dev/null; then
-  ok "hooks.json parse duoc"
+  ok "hooks.json parses"
 else
-  ng "hooks.json parse duoc"
+  ng "hooks.json parses"
 fi
 
-# marketplace.json la thu cho phep `/plugin marketplace add <repo>`. Khong co no thi kit
-# chi cai duoc bang --plugin-dir thu cong, va toan bo phan auto-trigger phu thuoc vao viec
-# nguoi dung nho lam buoc do moi phien.
+# marketplace.json is what enables `/plugin marketplace add <repo>`. Without it the kit can only be
+# installed by hand with --plugin-dir, and the whole auto-trigger story depends on the user
+# remembering to do that every session.
 MP="$KIT/.claude-plugin/marketplace.json"
 if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$(win "$MP")" 2>/dev/null; then
-  ok "marketplace.json parse duoc"
+  ok "marketplace.json parses"
 else
-  ng "marketplace.json parse duoc"
+  ng "marketplace.json parses"
 fi
-# Ten va version phai KHOP plugin.json. Lech nhau thi cai xong se tro nham cache dir.
+# Name and version must MATCH plugin.json. If they drift, the install points at the wrong cache dir.
 if node -e '
 const fs = require("fs");
 const [mp, pj] = process.argv.slice(1);
 const m = JSON.parse(fs.readFileSync(mp, "utf8"));
 const p = JSON.parse(fs.readFileSync(pj, "utf8"));
 const entry = (m.plugins || []).find(x => x.name === p.name);
-if (!entry) throw new Error("marketplace.json khong co plugin ten " + p.name);
-if (entry.version !== p.version) throw new Error("version lech: " + entry.version + " vs " + p.version);
-if (!entry.source) throw new Error("thieu field source");
+if (!entry) throw new Error("marketplace.json has no plugin named " + p.name);
+if (entry.version !== p.version) throw new Error("version mismatch: " + entry.version + " vs " + p.version);
+if (!entry.source) throw new Error("missing the source field");
 ' "$(win "$MP")" "$(win "$KIT/.claude-plugin/plugin.json")" 2>/dev/null; then
-  ok "marketplace.json khop plugin.json (ten + version + source)"
+  ok "marketplace.json matches plugin.json (name + version + source)"
 else
-  ng "marketplace.json khop plugin.json (ten + version + source)"
+  ng "marketplace.json matches plugin.json (name + version + source)"
 fi
-if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start co quyen exec (filesystem)"; else ng "hooks/session-start co quyen exec (filesystem)"; fi
+if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start is executable (filesystem)"; else ng "hooks/session-start is executable (filesystem)"; fi
 
-# Bit tren filesystem cua may ban KHONG dam bao bit do vao git. Repo nay tung co
-# core.fileMode=false, `chmod +x` khong duoc ghi nhan, va git luu 100644 — nguoi clone
-# ve se co mot hook khong chay duoc, trong khi test o may goc van xanh.
-# Nen phai kiem mode trong INDEX, khong phai tren dia.
+# The bit on your machine's filesystem does NOT guarantee the bit went into git. This repo once had
+# core.fileMode=false, so `chmod +x` was ignored and git stored 100644 — anyone cloning it got a hook
+# that would not run, while the tests on the original machine stayed green.
+# So check the mode in the INDEX, not on disk.
 if git -C "$KIT" rev-parse --git-dir >/dev/null 2>&1; then
   for f in hooks/session-start tests/run-tests.sh tests/acceptance.sh template/init.sh; do
     mode="$(git -C "$KIT" ls-files -s "$f" 2>/dev/null | awk '{print $1}')"
-    if [ "$mode" = "100755" ]; then ok "git index: $f la 100755"
-    else ng "git index: $f la '$mode' (can 100755 — nguoi clone se khong chay duoc)"; fi
+    if [ "$mode" = "100755" ]; then ok "git index: $f is 100755"
+    else ng "git index: $f is '$mode' (needs 100755 — anyone cloning could not run it)"; fi
   done
 else
-  skip_note="khong phai git repo"
-  echo "  (SKIP: khong phai git repo — khong kiem duoc mode trong index)"
+  skip_note="not a git repo"
+  echo "  (SKIP: not a git repo — cannot check modes in the index)"
 fi
 
-# Hook phai IM LANG ngoai project co harness — day la khac biet so voi bom vo dieu kien.
+# The hook must stay QUIET outside a harness project — that is the difference from injecting unconditionally.
 NOHARNESS="$KIT/.tmp-tests/noharness"
 rm -rf "$NOHARNESS"; mkdir -p "$NOHARNESS"
 out="$(CLAUDE_PROJECT_DIR="$NOHARNESS" bash "$KIT/hooks/session-start" 2>&1)"
-if [ -z "$out" ]; then ok "hook im lang trong repo khong co harness"; else ng "hook im lang trong repo khong co harness (in ra: $out)"; fi
+if [ -z "$out" ]; then ok "hook stays quiet in a repo with no harness"; else ng "hook stays quiet in a repo with no harness (printed: $out)"; fi
 
-# Trong project co harness: phai ra JSON hop le, chua skill va state that.
+# Inside a harness project: it must emit valid JSON containing the skill and the real state.
 P="$(new_project)"
 out="$(CLAUDE_PROJECT_DIR="$P" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
 if printf '%s' "$out" | node -e '
 let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
   const j = JSON.parse(s);
   const ctx = j.hookSpecificOutput?.additionalContext ?? j.additionalContext;
-  if (typeof ctx !== "string" || !ctx.length) throw new Error("khong co additionalContext");
-  if (!ctx.includes("using-harness")) throw new Error("khong bom skill using-harness");
-  if (!ctx.includes("ACTIVE: F01")) throw new Error("khong bom state that (active feature)");
-  if (!ctx.includes("done_when")) throw new Error("khong bom done_when");
+  if (typeof ctx !== "string" || !ctx.length) throw new Error("no additionalContext");
+  if (!ctx.includes("using-harness")) throw new Error("did not inject the using-harness skill");
+  if (!ctx.includes("ACTIVE: F01")) throw new Error("did not inject the real state (active feature)");
+  if (!ctx.includes("done_when")) throw new Error("did not inject done_when");
 });' 2>/dev/null; then
-  ok "hook bom JSON hop le + skill + state that (ACTIVE F01, done_when)"
+  ok "hook injects valid JSON + the skill + the real state (ACTIVE F01, done_when)"
 else
-  ng "hook bom JSON hop le + skill + state that"
+  ng "hook injects valid JSON + the skill + the real state"
 fi
 
-# Hook phai canh bao khi dependency chua xong — day la thu chan overreach ngay dau phien.
+# The hook must warn when a dependency is unfinished — that is what stops overreach at the very start of a session.
 P2="$(new_project)"
 patch_feature "$P2" "F03" '{"status":"pending"}'
 node -e '
@@ -459,10 +460,10 @@ const fs=require("fs");const f=process.argv[1]+"/feature_list.json";
 const j=JSON.parse(fs.readFileSync(f,"utf8"));j.active_feature="F03";
 fs.writeFileSync(f,JSON.stringify(j,null,2));' "$(win "$P2")"
 out="$(CLAUDE_PROJECT_DIR="$P2" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
-if printf '%s' "$out" | grep -qF 'DEPS CHUA XONG'; then
-  ok "hook canh bao dependency chua xong"
+if printf '%s' "$out" | grep -qF 'DEPS NOT DONE'; then
+  ok "hook warns about an unfinished dependency"
 else
-  ng "hook canh bao dependency chua xong"
+  ng "hook warns about an unfinished dependency"
 fi
 
 echo ""
@@ -472,77 +473,78 @@ P="$KIT/.tmp-tests/skills-dry"
 rm -rf "$P"; mkdir -p "$P"
 out="$(node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "S" --with-skills --dry-run 2>&1)"
 if printf '%s' "$out" | grep -qE '\.claude[\\/]skills[\\/]using-harness[\\/]SKILL\.md'; then
-  ok "--with-skills liet ke .claude/skills/using-harness/SKILL.md"
+  ok "--with-skills lists .claude/skills/using-harness/SKILL.md"
 else
-  ng "--with-skills liet ke .claude/skills/using-harness/SKILL.md"
+  ng "--with-skills lists .claude/skills/using-harness/SKILL.md"
 fi
 
-# Khong co --with-skills thi KHONG duoc do skill vao project (mac dinh la plugin route).
+# Without --with-skills the skills must NOT be dumped into the project (the plugin route is the default).
 P="$KIT/.tmp-tests/noskills-dry"
 rm -rf "$P"; mkdir -p "$P"
 out="$(node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "S" --dry-run 2>&1)"
 if printf '%s' "$out" | grep -qF '.claude/skills'; then
-  ng "mac dinh khong copy skills vao project"
+  ng "by default skills are not copied into the project"
 else
-  ok "mac dinh khong copy skills vao project"
+  ok "by default skills are not copied into the project"
 fi
 
-# Copy that (khong dry-run) phai ra file doc duoc.
+# A real copy (not dry-run) must produce readable files.
 P="$KIT/.tmp-tests/skills-real"
 rm -rf "$P"; mkdir -p "$P"
 node "$(win "$KIT/bootstrap.mjs")" --target "$(win "$P")" --name "S" --with-skills >/dev/null 2>&1
 if [ -f "$P/.claude/skills/verifying-a-feature/SKILL.md" ]; then
-  ok "--with-skills copy that ra .claude/skills/"
+  ok "--with-skills really copies into .claude/skills/"
 else
-  ng "--with-skills copy that ra .claude/skills/"
+  ng "--with-skills really copies into .claude/skills/"
 fi
 
 echo ""
-echo "== CLAUDE.md wiring toi skills =="
-# Duyet skills/ thay vi liet ke tay: them skill moi ma quen noi vao CLAUDE.md thi test do,
-# khong im lang bo qua nhu danh sach cung.
+echo "== CLAUDE.md wiring to the skills =="
+# Walk skills/ instead of hardcoding a list: adding a new skill and forgetting to wire it into
+# CLAUDE.md makes this test fail, rather than being silently ignored as a fixed list would.
 for d in "$KIT"/skills/*/; do
   s="$(basename "$d")"
-  [ "$s" = "using-harness" ] && continue   # meta skill, hook bom vao, khong can route trong CLAUDE.md
-  has "CLAUDE.md route toi skill: $s" "$C" "$s"
+  [ "$s" = "using-harness" ] && continue   # meta skill, injected by the hook, needs no route in CLAUDE.md
+  has "CLAUDE.md routes to skill: $s" "$C" "$s"
 done
 
 echo ""
-echo "== verify-gate: dang ky hook =="
+echo "== verify-gate: hook registration =="
 
-# Gate chi co tac dung neu no duoc DANG KY dung 3 su kien. Thieu post-bash thi marker
-# khong bao gio duoc dat va gate chan sach moi thao tac ghi done — hong theo huong te nhat.
+# The gate only works if it is REGISTERED on all 3 events. Without post-bash the marker is never set
+# and the gate blocks every write of done — broken in the worst possible direction.
 HJ="$KIT/hooks/hooks.json"
 for pair in "PreToolUse:pre-edit" "PostToolUse:post-bash" "PostToolUse:post-edit"; do
   ev="${pair%%:*}"; mode="${pair##*:}"
   if node -e '
 const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
 const groups = (j.hooks || {})[process.argv[2]] || [];
-// command that la:  "${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate" pre-edit
-// nen giua ten script va mode co mot dau nhay dong. Khong duoc match chuoi lien "verify-gate <mode>".
+// the real command is:  "${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate" pre-edit
+// so there is a closing quote between the script name and the mode. Do not match a
+// contiguous "verify-gate <mode>" string.
 const re = new RegExp("verify-gate\"?\\s+" + process.argv[3] + "\\b");
 const found = groups.some(g => (g.hooks || []).some(h => re.test(h.command || "")));
 process.exit(found ? 0 : 1);
 ' "$HJ" "$ev" "$mode" 2>/dev/null; then
-    ok "hooks.json dang ky $ev -> verify-gate $mode"
+    ok "hooks.json registers $ev -> verify-gate $mode"
   else
-    ng "hooks.json dang ky $ev -> verify-gate $mode"
+    ng "hooks.json registers $ev -> verify-gate $mode"
   fi
 done
 
-if [ -x "$KIT/hooks/verify-gate" ]; then ok "hooks/verify-gate co quyen exec"; else ng "hooks/verify-gate co quyen exec"; fi
+if [ -x "$KIT/hooks/verify-gate" ]; then ok "hooks/verify-gate is executable"; else ng "hooks/verify-gate is executable"; fi
 
-# --- Hop dong init.sh <-> verify-gate ------------------------------------------------
-# Gate khong co cach nao khac de biet mot lan verify da thanh cong ngoai hai chuoi nay.
-# Doi/xoa chung ma khong ai phat hien la lo hong nguy hiem nhat cua thiet ke marker.
+# --- The init.sh <-> verify-gate contract ---------------------------------------------
+# The gate has no way to know a verify run succeeded other than these two strings.
+# Changing or deleting them unnoticed is the most dangerous hole in the marker design.
 I="$KIT/template/init.sh"
-has "init.sh in chuoi hop dong VERIFY OK"     "$I" "VERIFY OK"
-has "init.sh in chuoi hop dong VERIFY FAILED" "$I" "VERIFY FAILED"
-has "init.sh ghi ro day la hop dong voi gate" "$I" "HOP DONG VOI verify-gate"
-has "verify-gate doc dung chuoi hop dong"     "$KIT/hooks/verify-gate.js" 'const CONTRACT = "VERIFY OK"'
+has "init.sh prints the contract string VERIFY OK"     "$I" "VERIFY OK"
+has "init.sh prints the contract string VERIFY FAILED" "$I" "VERIFY FAILED"
+has "init.sh states that this is the contract with the gate" "$I" "CONTRACT WITH verify-gate"
+has "verify-gate reads the right contract string"      "$KIT/hooks/verify-gate.js" 'const CONTRACT = "VERIFY OK"'
 
-# Kiem HANH VI, khong chi kiem noi dung file: init.sh phai THUC SU in chuoi do khi chay.
-# Mot comment con nguyen trong khi lenh echo bi doi van lam hop dong vo.
+# Check BEHAVIOUR, not just file contents: init.sh must ACTUALLY print that string when it runs.
+# An intact comment with a changed echo still breaks the contract.
 P="$(new_project)"
 node -e '
 const fs = require("fs");
@@ -550,12 +552,12 @@ fs.writeFileSync(process.argv[1] + "/package.json",
   JSON.stringify({ name: "t", private: true, scripts: { build: "node -e \"0\"" } }, null, 2));
 ' "$(win "$P")"
 out="$(bash "$P/init.sh" build 2>&1)"
-if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "init.sh chay that (con SKIP) -> in VERIFY OK"; else ng "init.sh chay that (con SKIP) -> in VERIFY OK"; fi
+if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "a real init.sh run (with SKIPs) -> prints VERIFY OK"; else ng "a real init.sh run (with SKIPs) -> prints VERIFY OK"; fi
 
-# init.sh co HAI nhanh in VERIFY OK: "con N check bi SKIP" va "moi check deu chay".
-# Ca tren chi cham nhanh thu nhat. Mutation test cho thay: doi rieng nhanh thu hai thanh
-# "ALL GREEN" va ca 143 assertion van xanh — hop dong vo ma khong ai biet.
-# Nen phai co mot ca chay het moi check (0 SKIP) de phu nhanh con lai.
+# init.sh has TWO branches that print VERIFY OK: "N check(s) were SKIPped" and "all checks ran".
+# The case above only touches the first. A mutation test showed that changing just the second branch
+# to "ALL GREEN" left all 143 assertions green — the contract broken with nobody noticing.
+# So there must be a case where every check runs (0 SKIP) to cover the other branch.
 P2="$(new_project)"
 node -e '
 const fs = require("fs");
@@ -563,72 +565,72 @@ const d = process.argv[1];
 fs.writeFileSync(d + "/package.json", JSON.stringify({ name: "t", private: true, scripts: {
   build: "node -e \"0\"", lint: "node -e \"0\"", test: "node -e \"0\"", typecheck: "node -e \"0\"",
 }}, null, 2));
-fs.mkdirSync(d + "/dist", { recursive: true });          // de check_secret co cai de quet
+fs.mkdirSync(d + "/dist", { recursive: true });          // give check_secret something to scan
 fs.writeFileSync(d + "/dist/bundle.js", "console.log(1)\n");
 ' "$(win "$P2")"
 out="$(bash "$P2/init.sh" all 2>&1)"
-if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "init.sh 0 SKIP -> van in VERIFY OK"; else ng "init.sh 0 SKIP -> van in VERIFY OK"; fi
-if printf '%s' "$out" | grep -qF "moi check deu chay"; then ok "init.sh 0 SKIP -> bao moi check deu chay"; else ng "init.sh 0 SKIP -> bao moi check deu chay"; fi
+if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "init.sh with 0 SKIP -> still prints VERIFY OK"; else ng "init.sh with 0 SKIP -> still prints VERIFY OK"; fi
+if printf '%s' "$out" | grep -qF "all checks ran"; then ok "init.sh with 0 SKIP -> reports that all checks ran"; else ng "init.sh with 0 SKIP -> reports that all checks ran"; fi
 node -e '
 const fs = require("fs");
 fs.writeFileSync(process.argv[1] + "/package.json",
   JSON.stringify({ name: "t", private: true, scripts: { build: "node -e \"process.exit(1)\"" } }, null, 2));
 ' "$(win "$P")"
 out="$(bash "$P/init.sh" build 2>&1)"
-if printf '%s' "$out" | grep -qF "VERIFY FAILED"; then ok "init.sh that bai -> in VERIFY FAILED"; else ng "init.sh that bai -> in VERIFY FAILED"; fi
+if printf '%s' "$out" | grep -qF "VERIFY FAILED"; then ok "a failing init.sh -> prints VERIFY FAILED"; else ng "a failing init.sh -> prints VERIFY FAILED"; fi
 
-# Gate phai TU KIEM hop dong truoc khi tu choi. Khong co buoc nay thi mot init.sh bi sua
-# se lam gate am tham chuyen tu fail-open thanh fail-closed.
+# The gate must SELF-CHECK the contract before refusing. Without that step, an edited init.sh
+# silently flips the gate from fail-open to fail-closed.
 if grep -qF 'contractHolds' "$KIT/hooks/verify-gate.js"; then
-  ok "verify-gate kiem hop dong truoc khi tu choi"
+  ok "verify-gate checks the contract before refusing"
 else
-  ng "verify-gate kiem hop dong truoc khi tu choi — thieu no thi init.sh bi sua se khoa cung phien"
+  ng "verify-gate checks the contract before refusing — without it an edited init.sh hard-locks the session"
 fi
 for f in hooks/verify-gate tests/test-verify-gate.sh; do
   mode="$(git -C "$KIT" ls-files -s "$f" 2>/dev/null | awk '{print $1}')"
-  if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: $f la 100755"
-  else ng "git index: $f la '$mode' (can 100755)"; fi
+  if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: $f is 100755"
+  else ng "git index: $f is '$mode' (needs 100755)"; fi
 done
 
-# Fail-open la lua chon co chu dich, phai giu nguyen: mot gate hong ma chan sach moi thao
-# tac ghi con te hon khong co gate. Neu ai do doi thanh fail-closed, test nay phai do.
-if grep -qF 'gate KHONG hoat dong trong phien nay' "$KIT/hooks/verify-gate"; then
-  ok "verify-gate fail-open khi thieu node (co canh bao ra stderr)"
+# Fail-open is a deliberate choice and must stay: a broken gate that blocks every write is worse
+# than no gate at all. If someone flips it to fail-closed, this test must go red.
+if grep -qF 'the gate is NOT active in this session' "$KIT/hooks/verify-gate"; then
+  ok "verify-gate fails open when node is missing (with a warning on stderr)"
 else
-  ng "verify-gate fail-open khi thieu node"
+  ng "verify-gate fails open when node is missing"
 fi
 
 echo ""
-echo "== tang eval: faithfulness =="
+echo "== eval tier: faithfulness =="
 
 E="$KIT/tests/eval-faithfulness.sh"
-if [ -f "$E" ]; then ok "co tests/eval-faithfulness.sh"; else ng "co tests/eval-faithfulness.sh"; fi
+if [ -f "$E" ]; then ok "tests/eval-faithfulness.sh exists"; else ng "tests/eval-faithfulness.sh exists"; fi
 
-# Control la thu duy nhat ngan eval khoi thuong cho viec tu choi bua. Mot suite chi co
-# probe "refuse" se cho 100% ke ca khi skill tu choi moi thu va khong lam gi ca.
+# The control probe is the only thing stopping the eval from rewarding indiscriminate refusal. A suite
+# made only of "refuse" probes scores 100% even for a skill that refuses everything and does nothing.
 if grep -qF 'expect === "accept"' "$E" || grep -qE 'probe "honest-pass"' "$E"; then
-  ok "eval co probe control (honest-pass)"
+  ok "eval has a control probe (honest-pass)"
 else
-  ng "eval co probe control (honest-pass) — thieu no thi 'luon tu choi' se dat 100%"
+  ng "eval has a control probe (honest-pass) — without it 'always refuse' scores 100%"
 fi
 
-# Bang chung phai doc tu DIA va tu tool_result, khong duoc doc tu loi agent noi.
-if grep -qF 'feature_list.json", "utf8"' "$E"; then ok "eval doc status tu file tren dia"; else ng "eval doc status tu file tren dia"; fi
-if grep -qF 'c.type === "tool_result"' "$E"; then ok "eval doc grounding tu tool_result"; else ng "eval doc grounding tu tool_result"; fi
+# Evidence must be read from DISK and from tool_result, never from what the agent claims.
+if grep -qF 'feature_list.json", "utf8"' "$E"; then ok "eval reads status from the file on disk"; else ng "eval reads status from the file on disk"; fi
+if grep -qF 'c.type === "tool_result"' "$E"; then ok "eval reads grounding from tool_result"; else ng "eval reads grounding from tool_result"; fi
 
-# Doi tuong dem phai co dinh. Doc active_feature se di cham nham feature sau khi agent
-# hoan thanh F01 va doi con tro sang F02.
-if grep -qF 'const TARGET = "F01"' "$E"; then ok "eval dem feature co dinh, khong theo active_feature"; else ng "eval dem feature co dinh"; fi
+# The counted subject must be fixed. Reading active_feature would point at the wrong feature once the
+# agent finishes F01 and moves the pointer to F02.
+if grep -qF 'const TARGET = "F01"' "$E"; then ok "eval counts a fixed feature, not active_feature"; else ng "eval counts a fixed feature"; fi
 
-# Che do dung fixture ma khong mo phien LLM — kiem fixture phai re.
-if grep -qF 'EVAL_FIXTURE_DIR' "$E"; then ok "eval co che do fixture-only (kiem fixture khong ton token)"; else ng "eval co che do fixture-only"; fi
+# A mode that exercises the fixtures without opening an LLM session — fixture checks must be cheap.
+if grep -qF 'EVAL_FIXTURE_DIR' "$E"; then ok "eval has a fixture-only mode (checking fixtures costs no tokens)"; else ng "eval has a fixture-only mode"; fi
 
-# dontAsk chan ./init.sh trong khi van cho ls/echo -> eval do nhieu quyen thay vi do bia.
-if grep -qF 'bypassPermissions' "$E"; then ok "eval dung bypassPermissions (dontAsk chan ./init.sh)"; else ng "eval dung bypassPermissions"; fi
+# dontAsk blocks ./init.sh while still allowing ls/echo -> the eval would measure permissions rather than fabrication.
+if grep -qF 'bypassPermissions' "$E"; then ok "eval uses bypassPermissions (dontAsk would block ./init.sh)"; else ng "eval uses bypassPermissions"; fi
 
 mode="$(git -C "$KIT" ls-files -s tests/eval-faithfulness.sh 2>/dev/null | awk '{print $1}')"
-if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: eval-faithfulness.sh la 100755"
-else ng "git index: eval-faithfulness.sh la '$mode' (can 100755)"; fi
+if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: eval-faithfulness.sh is 100755"
+else ng "git index: eval-faithfulness.sh is '$mode' (needs 100755)"; fi
 
 echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"

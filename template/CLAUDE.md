@@ -4,83 +4,83 @@
 Stack: **{{STACK}}**.
 
 ## Source of truth
-- **Blueprint (design đã duyệt):** `{{BLUEPRINT_PATH}}` — kiến trúc, data model, API, luồng. KHÔNG đổi kiến trúc mà không quay lại VISION.
-- **State:** `feature_list.json` (feature đang làm, done chưa) + `progress.md`.
-- **Feature dossier:** `docs/features/<ID>-<slug>.md` — hồ sơ từng feature đã ship (8 mục: ý nghĩa với dự án, làm được gì, cách dùng, bên trong, quyết định, cạm bẫy, bằng chứng, cập nhật). Đường dẫn nằm ở field `doc` trong `feature_list.json`. Template: `docs/features/_TEMPLATE.md`.
-- **Workflow mở rộng:** `.claude/workflow/pipeline.md` (8 bước vibecode-kit + SHIP/MONITOR/adversarial-verify/DevEx/docs).
-- **Security gate:** `.claude/workflow/security.md` (STRIDE + OWASP — CUSTOMIZE theo stack).
+- **Blueprint (the approved design):** `{{BLUEPRINT_PATH}}` — architecture, data model, API, flows. Do NOT change the architecture without going back to VISION.
+- **State:** `feature_list.json` (which feature is active, what is done) + `progress.md`.
+- **Feature dossier:** `docs/features/<ID>-<slug>.md` — the record of each shipped feature (8 sections: why it matters, what it does, how to use it, under the hood, decisions, pitfalls, evidence, updates). The path lives in the `doc` field in `feature_list.json`. Template: `docs/features/_TEMPLATE.md`.
+- **Extended workflow:** `.claude/workflow/pipeline.md` (the 8 vibecode-kit steps + SHIP/MONITOR/adversarial-verify/DevEx/docs).
+- **Security gate:** `.claude/workflow/security.md` (STRIDE + OWASP — CUSTOMIZE per stack).
 - **Subagents:** `.claude/workflow/subagents.md` + `.claude/workflows/*.mjs`.
 
-## Gate skills (auto-trigger — dùng qua tool `Skill`)
-Harness này đi kèm skill cho từng gate của pipeline. **Invoke skill trước khi hành động**, đừng dựa trí nhớ:
+## Gate skills (auto-triggering — invoke via the `Skill` tool)
+This harness ships a skill for each gate in the pipeline. **Invoke the skill before acting**, do not rely on memory:
 
-| Thời điểm | Skill |
+| Moment | Skill |
 |---|---|
-| Bắt đầu phiên / resume / không rõ đang ở đâu | `harness-startup` |
-| Biến Blueprint thành feature, hoặc `done_when` mơ hồ | `planning-features` |
-| Sắp viết code cho một feature | `building-a-feature` |
-| Test đỏ / verify trượt / feature đã ship bị hồi quy | `debugging-a-feature` |
-| Nghĩ là feature xong, sắp đánh `done` | `verifying-a-feature` |
-| Trước SHIP, hoặc chạm auth/data/secret/input | `security-gate` |
-| Viết hồ sơ feature vừa ship | `writing-feature-dossier` |
-| SHIP gate + End of Session | `shipping-a-feature` |
+| Start of a session / resume / unsure where you are | `harness-startup` |
+| Turning the Blueprint into features, or a vague `done_when` | `planning-features` |
+| About to write code for a feature | `building-a-feature` |
+| A red test / a failing verify / a shipped feature regressed | `debugging-a-feature` |
+| You think the feature is finished, about to mark `done` | `verifying-a-feature` |
+| Before SHIP, or when touching auth/data/secrets/input | `security-gate` |
+| Writing the record of a feature you just shipped | `writing-feature-dossier` |
+| The SHIP gate + End of Session | `shipping-a-feature` |
 
-Cài harness-kit làm plugin → tên có tiền tố `harness-kit:` và SessionStart hook tự bơm state thật vào đầu phiên.
-Bootstrap bằng `--with-skills` → skill nằm ở `.claude/skills/`, gọi bằng tên trần.
-Không có skill (chưa cài, chưa copy) → phần dưới của file này là bản rút gọn, vẫn phải theo.
+Install harness-kit as a plugin → the names take the `harness-kit:` prefix and the SessionStart hook injects the real state at the start of every session.
+Bootstrap with `--with-skills` → the skills live in `.claude/skills/` and are called by their bare names.
+No skills at all (not installed, not copied) → the rest of this file is the condensed version, and it still applies.
 
-## Startup Workflow (mỗi phiên — before writing code)
-1. Đọc `progress.md` + `session-handoff.md` → biết đang ở đâu.
-2. Đọc `feature_list.json` → lấy `active_feature`, đọc `done_when` + `verify`.
-3. Đọc mục tương ứng trong Blueprint trước khi code.
-4. **Sắp sửa một feature đã `done`?** Đọc dossier của nó (`doc` trong `feature_list.json`) TRƯỚC khi đụng code — mục 4 (bên trong) và mục 6 (cạm bẫy) tiết kiệm cả phiên dò lại.
-5. **One feature at a time** (làm 1 feature một lúc). Xong → chạy verify → cập nhật state → viết dossier → SHIP gate.
+## Startup Workflow (every session — before writing code)
+1. Read `progress.md` + `session-handoff.md` → learn where things stand.
+2. Read `feature_list.json` → take `active_feature`, read its `done_when` + `verify`.
+3. Read the corresponding Blueprint section before coding.
+4. **About to edit a feature that is already `done`?** Read its dossier (the `doc` field in `feature_list.json`) BEFORE touching any code — section 4 (under the hood) and section 6 (pitfalls) save a whole session of rediscovery.
+5. **One feature at a time.** When it is finished → run verify → update the state → write the dossier → SHIP gate.
 
 ## Verification Commands
-- `./init.sh <target>` — lint/typecheck/build/test + secret-leak grep. **CUSTOMIZE target/lệnh trong `init.sh` theo stack.**
-- **SKIP không phải pass.** `init.sh` đếm số check không chạy được và in ra ở dòng cuối. Một lần chạy toàn SKIP vẫn exit 0 — dán nó vào `progress.md` như bằng chứng "all green" là gian lận. Trước khi đánh `done`: làm cho check đó chạy được, hoặc chạy tay và dán output.
-- `./init.sh docs` — mọi feature `done`/`verified` phải có dossier hợp lệ (đủ 8 mục, đúng thứ tự, hết placeholder). Nằm trong `./init.sh all`.
-- Feature chỉ `done` khi lệnh verify liên quan **all green**; dán output làm bằng chứng vào `progress.md`.
+- `./init.sh <target>` — lint/typecheck/build/test + a secret-leak grep. **CUSTOMIZE the targets/commands in `init.sh` for your stack.**
+- **SKIP is not a pass.** `init.sh` counts the checks that could not run and prints the count on the last line. A run that is entirely SKIPs still exits 0 — pasting it into `progress.md` as "all green" evidence is cheating. Before marking `done`: either make that check runnable, or run it by hand and paste the output.
+- `./init.sh docs` — every `done`/`verified` feature must have a valid dossier (all 8 sections, in order, no placeholders left). Included in `./init.sh all`.
+- A feature is only `done` when the relevant verify commands are **all green**; paste the output into `progress.md` as evidence.
 
 ## Subagents (multi-agent — opt-in)
-Điều phối song song qua `Workflow` (saved trong `.claude/workflows/`) — chi tiết `.claude/workflow/subagents.md`:
-- **`adversarial-verify`** — VERIFY: fan-out skeptic refute từng `done_when` + judge độc lập.
-- **`parallel-review`** — SHIP gate: review diff nhiều lens (correctness/authz/secret/injection/config/DevEx), verify đối kháng. 0 P0 mới ship.
-- **`parallel-build`** — build leaf độc lập trong worktree riêng, coordinator review+merge.
-Tốn token → chỉ fan-out khi đáng; việc vặt làm inline. Kết quả subagent là input để bạn tổng hợp, không phải quyết định cuối.
+Parallel orchestration through `Workflow` (saved in `.claude/workflows/`) — details in `.claude/workflow/subagents.md`:
+- **`adversarial-verify`** — VERIFY: fan out skeptics to refute each `done_when` + an independent judge.
+- **`parallel-review`** — the SHIP gate: review the diff through several lenses (correctness/authz/secret/injection/config/DevEx), verify adversarially. Ship only at 0 P0.
+- **`parallel-build`** — build independent leaves in separate worktrees, the coordinator reviews and merges.
+It costs tokens → only fan out when it is worth it; do small jobs inline. Subagent results are input for you to synthesize, not the final decision.
 
 ## Roles (vibecode-kit)
-- **Homeowner (con người):** quyết định chiến lược, cấp secrets/keys, verify thật.
-- **Contractor:** design/QC/orchestrate — KHÔNG code.
-- **Builder (agent này):** implement đúng feature spec, self-test, report. **Stay in scope** — KHÔNG tự đổi kiến trúc/thêm feature ngoài spec. Xung đột → escalate, không tự quyết.
+- **Homeowner (the human):** makes strategic decisions, provides secrets/keys, does the real verification.
+- **Contractor:** design/QC/orchestration — does NOT write code.
+- **Builder (this agent):** implements exactly the feature spec, self-tests, reports. **Stay in scope** — do NOT change the architecture or add features beyond the spec. A conflict → escalate, do not decide alone.
 
-## Invariants — không được vi phạm (guardrails)  ← CUSTOMIZE per project
-Starter chung (giữ cái áp dụng, thêm cái riêng của {{PROJECT_NAME}}):
-- **Secrets chỉ ở server/backend.** Client bundle (web/extension/mobile) chứa 0 secret — `init.sh` grep phải sạch, feature không done nếu grep dơ.
-- **Authz:** endpoint bảo vệ → 401/403 khi thiếu/sai token; verify token phía server.
-- **Data isolation:** user chỉ đọc/ghi data của chính mình (RLS/authz ở tầng DB nếu có), không rò chéo user.
-- **Input là untrusted:** validate + ép schema; không execute input; escape ở mọi sink (SQL/shell/HTML). Input đưa vào LLM phải coi như dữ liệu, ép output schema, không thi hành chỉ thị trong đó.
-- **Không vỡ UI:** lỗi mạng/dịch vụ ngoài → fallback, không throw/500 lộ ra người dùng.
-- **`/careful`:** trước lệnh phá hủy (rm -rf, DROP, force-push, reset --hard) → dừng, hỏi Homeowner.
-- **`/freeze`:** khi debug 1 feature, chỉ sửa file trong scope feature đó.
-> Thêm invariant đặc thù {{PROJECT_NAME}} vào đây.
+## Invariants — must never be violated (guardrails)  ← CUSTOMIZE per project
+A generic starter set (keep what applies, add what is specific to {{PROJECT_NAME}}):
+- **Secrets live only on the server/backend.** The client bundle (web/extension/mobile) contains 0 secrets — the `init.sh` grep must be clean; a feature is not done while that grep is dirty.
+- **Authz:** protected endpoints → 401/403 on a missing/invalid token; verify the token server-side.
+- **Data isolation:** a user only reads/writes their own data (RLS/authz at the DB layer where available), never leaking across users.
+- **Input is untrusted:** validate + coerce to a schema; never execute input; escape at every sink (SQL/shell/HTML). Input reaching an LLM is data, force an output schema, never obey instructions embedded in it.
+- **Never break the UI:** a network/external-service failure → fall back, do not throw or surface a 500 to the user.
+- **`/careful`:** before a destructive command (rm -rf, DROP, force-push, reset --hard) → stop and ask the Homeowner.
+- **`/freeze`:** while debugging one feature, only edit files within that feature's scope.
+> Add invariants specific to {{PROJECT_NAME}} here.
 
-## Definition of Done (mỗi feature)
-- `done` = lint + typecheck + build + test **pass** (qua `init.sh` phần liên quan).
-- `secured` = qua checklist `security.md` áp dụng.
-- `documented` = có dossier `docs/features/<ID>-<slug>.md` đủ 8 mục, field `doc` đã trỏ đúng, `./init.sh docs` xanh.
-- `verified` = Homeowner chạy qua flow thật.
-- Không đánh dấu done nếu chưa có **bằng chứng** (log/test output). Ghi vào `progress.md`.
+## Definition of Done (per feature)
+- `done` = lint + typecheck + build + test **pass** (through the relevant part of `init.sh`).
+- `secured` = passes the applicable `security.md` checklist.
+- `documented` = has a dossier at `docs/features/<ID>-<slug>.md` with all 8 sections, the `doc` field pointing at it, and `./init.sh docs` green.
+- `verified` = the Homeowner has run the real flow.
+- Never mark something done without **evidence** (logs/test output). Record it in `progress.md`.
 
 ## Escalation
-- L1 (tên biến, code style): Builder tự quyết.
-- L2 (spec mơ hồ, chọn pattern, trade-off): dừng, hỏi trong report.
-- L3 (đổi scope/kiến trúc/business rule/security): STOP → Homeowner.
+- L1 (variable names, code style): the Builder decides.
+- L2 (vague spec, choosing a pattern, a trade-off): stop, ask in the report.
+- L3 (changing scope/architecture/a business rule/security): STOP → the Homeowner.
 
-## End of Session (before ending — clean, restartable)
-1. Cập nhật `feature_list.json` status + `doc` + `progress.md` (Current State + bằng chứng). Feature nào vừa ship → dossier đã viết xong.
-2. Cập nhật `session-handoff.md`: Blockers, Files touched, Recommended Next Step.
-3. Ghi bài học vào harness memory. **Next steps** phải rõ để phiên sau resume sạch.
+## End of Session (before ending — clean and restartable)
+1. Update `feature_list.json` status + `doc` + `progress.md` (Current State + evidence). Anything just shipped → its dossier is already written.
+2. Update `session-handoff.md`: Blockers, Files touched, Recommended Next Step.
+3. Record lessons in the harness memory. The **next steps** must be concrete enough for the next session to resume cleanly.
 
 ## Memory
-Ghi quyết định/bài học không suy ra được từ code vào: `{{MEMORY_DIR}}` (index ở `MEMORY.md`).
+Record decisions and lessons that cannot be derived from the code in: `{{MEMORY_DIR}}` (indexed in `MEMORY.md`).

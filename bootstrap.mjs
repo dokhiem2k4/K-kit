@@ -51,7 +51,7 @@ if (!fs.existsSync(target)) { console.error(`target not found: ${target}`); proc
 const today = new Date().toISOString().slice(0, 10);
 const tokens = {
   '{{PROJECT_NAME}}': String(args.name),
-  '{{TAGLINE}}': String(args.tagline || 'TODO: mô tả 1 dòng đề tài.'),
+  '{{TAGLINE}}': String(args.tagline || 'TODO: one-line description of the project.'),
   '{{STACK}}': String(args.stack || 'TODO: tech stack'),
   '{{BLUEPRINT_PATH}}': String(args.blueprint || 'docs/specs/blueprint.md'),
   '{{MEMORY_DIR}}': String(args['memory-dir'] || '.claude/memory/'),
@@ -85,7 +85,7 @@ const withSkills = !!args['with-skills'];
 const sources = [[TEMPLATE_DIR, '']];
 if (withSkills) {
   if (fs.existsSync(SKILLS_DIR)) sources.push([SKILLS_DIR, path.join('.claude', 'skills')]);
-  else console.log('  WARN: --with-skills nhung khong tim thay skills/ trong kit');
+  else console.log('  WARN: --with-skills was passed but no skills/ directory was found in the kit');
 }
 
 const files = sources.flatMap(([root, prefix]) =>
@@ -108,9 +108,9 @@ for (const { src, rel } of files) {
 console.log(`\nharness-kit → ${target}`);
 console.log(`  project : ${tokens['{{PROJECT_NAME}}']}`);
 console.log(`  written : ${written}   skipped(existing): ${skipped}${dryRun ? '  [dry-run]' : ''}`);
-console.log(`  skills  : ${withSkills ? '.claude/skills/ (project-local, auto-discovered)' : 'khong copy — cai harness-kit lam plugin, hoac chay lai voi --with-skills'}`);
+console.log(`  skills  : ${withSkills ? '.claude/skills/ (project-local, auto-discovered)' : 'not copied — install harness-kit as a plugin, or re-run with --with-skills'}`);
 console.log(`\nNext:
-  1) Điền Blueprint tại ${tokens['{{BLUEPRINT_PATH}}']} (hoặc trỏ --blueprint sang file có sẵn).
-  2) Sửa feature_list.json (thay F01..F0x bằng feature thật) + Invariants trong CLAUDE.md + security.md + init.sh CONFIG theo stack.
-  3) Audit: node <harness-creator>/scripts/validate-harness.mjs --target ${target}  (kỳ vọng 100/100)
-  4) Bắt đầu BUILD theo .claude/workflow/pipeline.md.`);
+  1) Fill in the Blueprint at ${tokens['{{BLUEPRINT_PATH}}']} (or point --blueprint at an existing file).
+  2) Edit feature_list.json (replace F01..F0x with real features) + the Invariants in CLAUDE.md + security.md + the init.sh CONFIG for your stack.
+  3) Audit: node <harness-creator>/scripts/validate-harness.mjs --target ${target}  (expect 100/100)
+  4) Start BUILD following .claude/workflow/pipeline.md.`);

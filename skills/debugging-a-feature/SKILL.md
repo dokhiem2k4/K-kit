@@ -6,87 +6,87 @@ description: Only in a project whose repo root has feature_list.json (a bootstra
 # Debugging a feature
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
-**Skill nay khong day ban cach debug.** No tra loi cau hoi harness dat ra khi co bug:
-sua o dau, tinh vao feature nao, state va dossier phai doi gi.
+**This skill does not teach you how to debug.** It answers the questions the harness raises when a bug appears:
+where to fix it, which feature it counts against, and what has to change in the state and the dossier.
 
-**Phuong phap debug:** dung `superpowers:systematic-debugging` neu co cai.
-Khong co → toi thieu phai lam theo muc "Phuong phap toi thieu" ben duoi. Dung nhay thang vao sua.
+**Debugging method:** use `superpowers:systematic-debugging` if it is available.
+If not → at minimum follow the "Minimum method" section below. Do not jump straight to fixing.
 
-## Buoc 1 — bug nay thuoc ve dau
+## Step 1 — where does this bug belong
 
-Tra loi truoc khi sua mot dong nao.
+Answer this before editing a single line.
 
-| Tinh huong | Xu ly |
+| Situation | How to handle it |
 |---|---|
-| Bug trong feature **dang active** | Sua trong scope feature do. Khong doi status. |
-| Bug trong feature da `done`/`verified`, ban vua lam no vo | Van la loi cua feature dang active. Sua, va them dong vao **muc 8** dossier cua F cu. |
-| Bug co san trong feature da ship, khong lien quan viec dang lam | **Khong sua len.** Mo feature fix moi trong `feature_list.json`. Ghi vao `progress.md`. |
-| Bug o cho hoan toan ngoai scope | Ghi Open Question. Khong dung toi. |
+| A bug in the **currently active** feature | Fix it within that feature's scope. Do not change any status. |
+| A bug in a `done`/`verified` feature that you just broke | Still the active feature's fault. Fix it, and add a line to **section 8** of the old F's dossier. |
+| A pre-existing bug in a shipped feature, unrelated to current work | **Do not fix it in passing.** Open a new fix feature in `feature_list.json`. Record it in `progress.md`. |
+| A bug somewhere entirely out of scope | Record an Open Question. Do not touch it. |
 
-**`/freeze` luon bat khi debug:** chi sua file thuoc scope cua feature dang lam.
-Thay bug khac tren duong đi → ghi lai, khong tien tay sua. Diff lan lon khong review duoc,
-va khong ai biet thay doi nao that su vá duoc bug.
+**`/freeze` is always on while debugging:** touch only files inside the current feature's scope.
+Spot another bug along the way → record it, do not fix it in passing. A mixed diff cannot be reviewed,
+and nobody can tell which change actually fixed the bug.
 
-## Buoc 2 — doc dossier truoc khi doc code
+## Step 2 — read the dossier before reading the code
 
-Bug o feature da ship? Doc `docs/features/<ID>-<slug>.md` truoc:
+Is the bug in a shipped feature? Read `docs/features/<ID>-<slug>.md` first:
 
-- **Muc 6 (Cam bay khi sua)** — thuong da ghi san dung cho ban sap vo.
-- **Muc 4 (Ben trong)** — luong chinh + files touched, khoi do lai.
-- **Muc 5 (Quyet dinh)** — cai gi **co y** khong lam. Rat nhieu "bug" thuc ra la out-of-scope da chot.
+- **Section 6 (Pitfalls when editing)** — usually already names the exact thing you are about to break.
+- **Section 4 (Under the hood)** — the main flow + files touched, so you need not rediscover them.
+- **Section 5 (Decisions)** — what was **deliberately** not done. Plenty of "bugs" turn out to be settled out-of-scope decisions.
 
-Bo qua buoc nay roi "sua" mot thu von la quyet dinh co chu dich la cach lam hong feature dang chay.
+Skipping this step and then "fixing" something that was a deliberate decision is how you break a working feature.
 
-## Phuong phap toi thieu (khi khong co skill debug chuyen)
+## Minimum method (when no dedicated debugging skill is available)
 
-1. **Tai hien** — mot lenh chay lai duoc bug. Chua tai hien duoc thi chua duoc sua.
-2. **Thu hep** — bug con o dau khi bo bot dau vao? Tim don vi nho nhat con hong.
-3. **Giai thich** — viet ra mot cau: *nguyen nhan la X, nen Y xay ra*. Chua viet duoc thi chua hieu.
-4. **Sua nguyen nhan** — khong vá trieu chung, khong them try/catch nuot loi.
-5. **Chung minh** — test do TRUOC khi sua, xanh SAU khi sua. Chua thay no do thi khong biet no kiem gi.
+1. **Reproduce** — one command that re-runs the bug. Not reproduced means not ready to fix.
+2. **Narrow** — does the bug survive with less input? Find the smallest unit that is still broken.
+3. **Explain** — write one sentence: *the cause is X, therefore Y happens*. Cannot write it means you do not understand it.
+4. **Fix the cause** — do not patch the symptom, do not add a try/catch that swallows the error.
+5. **Prove it** — the test is red BEFORE the fix and green AFTER. If you never saw it red, you do not know what it checks.
 
-## Buoc 3 — bugfix di kem test tai hien
+## Step 3 — a bugfix ships with a reproducing test
 
-Bat buoc. Va phai thay no **do** truoc:
+Mandatory. And you must see it **red** first:
 
 ```
-viet test → chay (PHAI DO) → sua → chay (PHAI XANH) → revert ban sua → chay (PHAI DO LAI) → khoi phuc
+write the test → run (MUST BE RED) → fix → run (MUST BE GREEN) → revert the fix → run (MUST BE RED AGAIN) → restore
 ```
 
-Bo buoc revert thi ban khong biet test co that su kiem cai bug do khong.
-Rat nhieu "regression test" thuc ra xanh ca truoc lan sau khi sua.
+Skip the revert step and you do not know whether the test really checks that bug.
+Plenty of "regression tests" turn out to be green both before and after the fix.
 
-Khong viet duoc test tai hien → ban chua hieu bug → quay lai buoc 2 cua phuong phap.
+Cannot write a reproducing test → you do not understand the bug → go back to step 2 of the method.
 
-## Buoc 4 — cap nhat state
+## Step 4 — update the state
 
-- **`progress.md`** — bug la gi, nguyen nhan, cach vá, output test. Day la thu phien sau can.
-- **`feature_list.json`** — mo feature fix neu bug thuoc F da ship va khong lien quan viec dang lam.
-- **Dossier muc 8** — feature da ship bi doi hanh vi → them dong co ngay. Ngay bay gio.
-- **Dossier muc 6** — bug nay lo ra mot cam bay chua ai ghi? Them vao. Day la cach muc 6 day len.
+- **`progress.md`** — what the bug was, the cause, the fix, the test output. This is what the next session needs.
+- **`feature_list.json`** — open a fix feature if the bug belongs to a shipped F and is unrelated to current work.
+- **Dossier section 8** — a shipped feature changed behaviour → add a dated line. Right now.
+- **Dossier section 6** — did this bug expose a pitfall nobody had written down? Add it. That is how section 6 grows.
 
-Roi quay lai `harness-kit:verifying-a-feature` chay lai gate.
+Then go back to `harness-kit:verifying-a-feature` and re-run the gate.
 
-## Khi vong fix da xoay
+## When the fix loop has been spinning
 
-`verifying-a-feature` dem vong fix. Sang vong 3 ma van chua qua nghia la gia thiet cua ban sai,
-khong phai ban sua chua du. Dung sua tiep — viet ra gia thiet nao sai, hoac spawn subagent
-context sach doc lai tu dau. Vong 5 la breaker: escalate.
+`verifying-a-feature` counts the fix loops. Reaching loop 3 without passing means your assumption is wrong,
+not that you have not fixed enough. Stop fixing — write down which assumption is wrong, or spawn a
+clean-context subagent to re-read from scratch. Loop 5 is the breaker: escalate.
 
 ## Red flags
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Thay ngay loi roi, sua luon" | Chua tai hien thi chua biet do co phai loi khong. |
-| "Bug nho, khoi viet test" | Bug nho quay lai nhieu nhat. |
-| "Test xanh roi, khoi revert thu" | Chua thay no do thi khong biet no kiem gi. |
-| "Tien tay sua luon bug ben canh" | `/freeze`. Ghi lai thoi. |
-| "Bug o F cu, sua len cho nhanh" | Khong bang chung, khong dossier. Mo feature fix. |
-| "Them try/catch cho het loi" | Nuot loi khong phai vá. Trieu chung bien mat, bug o lai. |
-| "Doc dossier ton thoi gian" | Muc 6 thuong da ghi dung cho ban sap vo. |
-| "Sua 3 lan chua duoc, thu cach 4" | Vong 3 = gia thiet sai. Dung sua, doc lai tu dau. |
+| "I see the bug already, just fix it" | Not reproduced means you do not know it is the bug. |
+| "Small bug, no test needed" | Small bugs come back the most. |
+| "The test is green, no need to try reverting" | If you never saw it red, you do not know what it checks. |
+| "Fix the neighbouring bug while I am here" | `/freeze`. Just record it. |
+| "The bug is in an old F, fix it in passing" | No evidence, no dossier. Open a fix feature. |
+| "Add a try/catch to make the error go away" | Swallowing an error is not a fix. The symptom disappears, the bug stays. |
+| "Reading the dossier wastes time" | Section 6 usually names the exact thing you are about to break. |
+| "Three fixes failed, try a fourth" | Loop 3 = wrong assumption. Stop fixing, re-read from scratch. |

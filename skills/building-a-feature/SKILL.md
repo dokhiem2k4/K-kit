@@ -6,71 +6,71 @@ description: Only in a project whose repo root has feature_list.json (a bootstra
 # Building a feature
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
-**Nguyen tac:** `scope` va `done_when` trong `feature_list.json` la hop dong. Code ngoai hop dong
-la overreach, ke ca khi no "ro rang la can".
+**Principle:** `scope` and `done_when` in `feature_list.json` are the contract. Code outside the contract
+is overreach, even when it is "obviously needed".
 
-## Truoc khi go dong dau tien
+## Before typing the first line
 
-- [ ] Da chay `harness-kit:harness-startup` trong phien nay.
-- [ ] Doc `scope` cua feature — day la danh sach thu duoc phep dung toi.
-- [ ] Doc `done_when` — day la thu ban phai lam cho dung, khong hon.
-- [ ] Doc muc Blueprint tuong ung.
-- [ ] Doc muc **Invariants** trong `CLAUDE.md` — do la thu khong duoc vi pham du spec co noi gi.
+- [ ] `harness-kit:harness-startup` has already run in this session.
+- [ ] Read the feature's `scope` — that is the list of things you are allowed to touch.
+- [ ] Read `done_when` — that is what you must get right, and nothing more.
+- [ ] Read the corresponding Blueprint section.
+- [ ] Read the **Invariants** section in `CLAUDE.md` — those hold no matter what the spec says.
 
-## Trong luc build
+## While building
 
-**Live testing — bat buoc.** Phan nao chay duoc thi phai *chay that*: curl endpoint, mo app,
-build ra artifact, goi function trong REPL. Doc code roi ket luan "no se chay" khong tinh la test.
+**Live testing — mandatory.** Anything that can run must be *actually run*: curl the endpoint, open the app,
+build the artifact, call the function in a REPL. Reading code and concluding "it will work" is not a test.
 
-**Bugfix di kem test tai hien.** Sua bug ma khong co test do truoc-xanh sau thi bug se quay lai.
-Neu khong viet duoc test tai hien → ban chua hieu bug → invoke skill debug truoc.
+**A bugfix ships with a reproducing test.** Fix a bug with no test that was red before and green after, and the bug comes back.
+If you cannot write a reproducing test → you do not understand the bug yet → invoke the debugging skill first.
 
-**`/freeze`.** Dang sua bug cua F nao thi chi cham file thuoc scope F do. Thay bug o cho khac →
-ghi vao `progress.md` muc Open, khong sua tien tay.
+**`/freeze`.** While fixing a bug in some F, touch only files inside that F's scope. Spot a bug elsewhere →
+record it under Open in `progress.md`, do not fix it in passing.
 
-**`/careful`.** Lenh pha huy (`rm -rf`, `DROP`, `TRUNCATE`, `force-push`, `reset --hard`,
-xoa migration, ghi de file chua doc) → dung, hoi Homeowner. Khong co ngoai le "chac khong sao".
+**`/careful`.** Destructive commands (`rm -rf`, `DROP`, `TRUNCATE`, `force-push`, `reset --hard`,
+deleting a migration, overwriting a file you have not read) → stop, ask the Homeowner. There is no "it is probably fine" exception.
 
-**Atomic commit.** Moi feature/bugfix = 1 commit gon. Message neu **ly do** + feature id.
+**Atomic commits.** One feature/bugfix = one tight commit. The message states the **reason** + the feature id.
 
-## Escalation ladder — dung tu quyet sai bac
+## The escalation ladder — do not decide at the wrong rung
 
-| Bac | Vi du | Lam gi |
+| Rung | Examples | What to do |
 |---|---|---|
-| **L1** | Ten bien, code style, thu tu import, chia helper | Tu quyet, khong hoi |
-| **L2** | Spec mo ho, chon giua 2 pattern, trade-off perf/doc | **Dung**, hoi trong report, de xuat 1 phuong an |
-| **L3** | Doi scope / kien truc / business rule / bat cu thu gi cham security | **STOP**, escalate Homeowner, khong code tiep |
+| **L1** | Variable names, code style, import order, extracting a helper | Decide yourself, do not ask |
+| **L2** | Vague spec, choosing between 2 patterns, a perf/readability trade-off | **Stop**, ask in the report, propose one option |
+| **L3** | Changing scope / architecture / a business rule / anything touching security | **STOP**, escalate to the Homeowner, write no more code |
 
-Nham L3 thanh L1 la cach nhanh nhat de phai lam lai ca feature.
+Mistaking an L3 for an L1 is the fastest way to have to rebuild the whole feature.
 
-## Ranh gioi scope — thu KHONG duoc lam
+## Scope boundaries — what you may NOT do
 
-- Them feature khong co trong `feature_list.json` (du no "chi 5 dong").
-- Doi kien truc da duyet trong Blueprint.
-- Refactor file ngoai `scope` cua feature dang lam.
-- Them dependency moi ma Blueprint khong nhac toi → L3.
-- "Tien tay" sua bug khong lien quan → ghi lai, khong sua.
+- Add a feature not in `feature_list.json` (even if it is "only 5 lines").
+- Change the architecture approved in the Blueprint.
+- Refactor files outside the current feature's `scope`.
+- Add a new dependency the Blueprint never mentions → L3.
+- Fix an unrelated bug "while you are in there" → record it, do not fix it.
 
-Thay thu can lam nhung ngoai scope → viet vao `progress.md` muc Open Questions,
-de xuat mo feature moi. Khong lam len.
+Found something that needs doing but is out of scope → write it under Open Questions in `progress.md`
+and propose a new feature. Do not just do it.
 
-## Xong thi lam gi
+## When you are finished
 
-Khong tu danh `done`. Invoke `harness-kit:verifying-a-feature`.
+Do not mark `done` yourself. Invoke `harness-kit:verifying-a-feature`.
 
 ## Red flags
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Cai nay ro rang la can, them luon" | Ro rang voi ban ≠ trong scope. L3. |
-| "Refactor luon cho sach" | Refactor ngoai scope lam diff khong review duoc. |
-| "Doc code thay dung roi, khoi chay" | Doc code ≠ live testing. Chay di. |
-| "Bug nay 1 dong, khoi viet test" | Bug 1 dong quay lai nhieu nhat. |
-| "Spec mo ho, toi doan y Homeowner" | Doan = L2 lam thanh L1. Hoi. |
-| "Sua tien tay bug ben canh" | `/freeze`. Ghi lai thoi. |
-| "`rm -rf` cho nhanh, toi biet minh lam gi" | `/careful`. Hoi. |
+| "This is obviously needed, just add it" | Obvious to you ≠ in scope. L3. |
+| "Refactor it while I am here, keep it clean" | An out-of-scope refactor makes the diff unreviewable. |
+| "I read the code, it is right, no need to run it" | Reading code ≠ live testing. Run it. |
+| "This bug is one line, no test needed" | One-line bugs come back the most. |
+| "The spec is vague, I will guess what the Homeowner meant" | Guessing turns an L2 into an L1. Ask. |
+| "Fix the neighbouring bug while I am here" | `/freeze`. Just record it. |
+| "`rm -rf` is quicker, I know what I am doing" | `/careful`. Ask. |

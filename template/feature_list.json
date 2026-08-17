@@ -5,45 +5,45 @@
   "active_feature": "F01",
   "legend": {
     "status": ["pending", "in_progress", "blocked", "done", "verified", "deferred"],
-    "rule": "One feature at a time. 'done' needs evidence in progress.md. dependencies phai done truoc. Thay vi du duoi bang feature that cua {{PROJECT_NAME}}."
+    "rule": "One feature at a time. 'done' needs evidence in progress.md. Dependencies must be done first. Replace the examples below with the real features of {{PROJECT_NAME}}."
   },
-  "_howto": "Moi feature CAN co: id, name, description, status (bat buoc cho validator). Them scope/done_when/verify de Builder biet ranh gioi + tieu chi test. done_when phai testable. dependencies = list id phai xong truoc. doc = duong dan dossier docs/features/<ID>-<slug>.md, BAT BUOC khi status done/verified — ./init.sh docs se check du 8 muc, dung thu tu, khong con placeholder.",
+  "_howto": "Every feature NEEDS: id, name, description, status (required by the validator). Add scope/done_when/verify so the Builder knows the boundaries and the test criteria. done_when must be testable. dependencies = list of ids that must finish first. doc = path to the dossier docs/features/<ID>-<slug>.md, REQUIRED once status is done/verified — ./init.sh docs checks for all 8 sections, in order, with no placeholders left.",
   "features": [
     {
       "id": "F01",
       "name": "Scaffold project",
-      "description": "Dung skeleton du an ({{STACK}}): cau truc thu muc theo Blueprint + .env.example + README. Build rong pass.",
+      "description": "Stand up the project skeleton ({{STACK}}): directory structure per the Blueprint + .env.example + README. An empty build passes.",
       "dependencies": [],
       "status": "pending",
       "doc": "docs/features/F01-scaffold.md",
-      "scope": ["cau truc thu muc theo Blueprint", ".env.example (liet ke moi secret/config)", "README.md", "config build/lint/test"],
+      "scope": ["directory structure per the Blueprint", ".env.example (lists every secret/config)", "README.md", "build/lint/test config"],
       "done_when": [
-        "cai dependencies sach",
-        "build skeleton pass",
-        ".env.example liet ke du moi bien can"
+        "dependencies install cleanly",
+        "the skeleton build passes",
+        ".env.example lists every variable needed"
       ],
       "verify": ["./init.sh scaffold", "./init.sh docs"]
     },
     {
       "id": "F02",
       "name": "Data layer",
-      "description": "Schema/DB + migrations + rang buoc access (RLS/authz) neu co. Thay bang thuc te.",
+      "description": "Schema/DB + migrations + access constraints (RLS/authz) if any. Replace with the real thing.",
       "dependencies": ["F01"],
       "status": "pending",
       "doc": "docs/features/F02-data-layer.md",
-      "scope": ["schema + migrations", "access control (RLS/authz)", "seed/fixtures neu can"],
-      "done_when": ["migration apply sach", "access control chan cross-user (test)"],
+      "scope": ["schema + migrations", "access control (RLS/authz)", "seed/fixtures if needed"],
+      "done_when": ["migrations apply cleanly", "access control blocks cross-user reads (test)"],
       "verify": ["security.md: data isolation", "./init.sh docs"]
     },
     {
       "id": "F03",
       "name": "Auth",
-      "description": "Dang nhap/dang xuat + protected routes + endpoint me/profile. Thay bang thuc te.",
+      "description": "Login/logout + protected routes + a me/profile endpoint. Replace with the real thing.",
       "dependencies": ["F01", "F02"],
       "status": "pending",
       "doc": "docs/features/F03-auth.md",
       "scope": ["login/logout", "protected routes / guard", "GET me/profile"],
-      "done_when": ["endpoint bao ve thieu token -> 401", "route bao ve redirect khi chua login"],
+      "done_when": ["a protected endpoint with no token -> 401", "a protected route redirects when not logged in"],
       "verify": ["security.md: authz", "./init.sh", "./init.sh docs"]
     }
   ]

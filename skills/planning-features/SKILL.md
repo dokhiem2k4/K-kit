@@ -6,115 +6,115 @@ description: Only in a project whose repo root has feature_list.json (a bootstra
 # Planning features
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
-**Nguyen tac:** `done_when` sai thi moi gate phia sau vo dung. Verify chi manh bang tieu chi no kiem.
+**Principle:** if `done_when` is wrong, every gate downstream is useless. Verify is only as strong as the criteria it checks.
 
-Skill nay o **truoc** BUILD. No bien design da duyet thanh state may doc duoc.
+This skill comes **before** BUILD. It turns approved design into machine-readable state.
 
-## Truoc khi viet feature
+## Before writing any feature
 
-Harness gia dinh **Blueprint da co va da duyet**. Chua co?
+The harness assumes **the Blueprint exists and is approved**. It does not?
 
-- Chua ro lam gi / lam cho ai → chua den luot skill nay. Brainstorm truoc
-  (`superpowers:brainstorming` neu co cai), viet Blueprint, roi quay lai.
-- Co Blueprint nhung mo ho o dung cho ban sap code → L2: hoi Homeowner, dung tu doan.
+- Still unclear what to build or who for → it is not this skill's turn yet. Brainstorm first
+  (`superpowers:brainstorming` if available), write the Blueprint, then come back.
+- A Blueprint exists but is vague exactly where you are about to code → L2: ask the Homeowner, do not guess.
 
-Dung dung skill nay de *nghi ra* san pham. No de *phien dich* san pham da chot.
+Do not use this skill to *invent* the product. It is for *translating* a product that is already settled.
 
-## Mot feature tot trong `feature_list.json`
+## What a good feature looks like in `feature_list.json`
 
-Bat buoc (validator can): `id`, `name`, `description`, `status`.
-Nen co: `scope`, `done_when`, `verify`, `dependencies`, `doc`.
+Required (the validator needs these): `id`, `name`, `description`, `status`.
+Recommended: `scope`, `done_when`, `verify`, `dependencies`, `doc`.
 
 ```json
 {
   "id": "F04",
-  "name": "Reset mat khau qua email",
-  "description": "Nguoi dung quen mat khau: nhan link het han 15 phut qua email, dat lai mat khau.",
+  "name": "Password reset by email",
+  "description": "A user forgot their password: they receive a link that expires in 15 minutes by email and set a new password.",
   "dependencies": ["F03"],
   "status": "pending",
   "doc": "docs/features/F04-password-reset.md",
-  "scope": ["endpoint request-reset", "endpoint confirm-reset", "template email", "bang reset_token"],
+  "scope": ["request-reset endpoint", "confirm-reset endpoint", "email template", "reset_token table"],
   "done_when": [
-    "POST /auth/request-reset voi email co that -> 202, co 1 row trong reset_token",
-    "POST /auth/request-reset voi email khong ton tai -> 202 (khong lo email nao da dang ky)",
-    "token qua 15 phut -> confirm tra 410",
-    "dung lai token da dung -> 410"
+    "POST /auth/request-reset with a real email -> 202, one row in reset_token",
+    "POST /auth/request-reset with an unknown email -> 202 (does not reveal which emails are registered)",
+    "a token older than 15 minutes -> confirm returns 410",
+    "reusing an already-used token -> 410"
   ],
   "verify": ["npm test -- auth/reset", "./init.sh", "./init.sh docs"]
 }
 ```
 
-## `done_when` phai testable — day la phan de sai nhat
+## `done_when` must be testable — this is the easiest part to get wrong
 
-Moi tieu chi phai tra loi duoc bang **mot lenh** hoac **mot thao tac quan sat duoc**.
-Cong thuc: **dieu kien dau vao → ket qua quan sat duoc**.
+Every criterion must be answerable by **one command** or **one observable action**.
+The formula: **input condition → observable result**.
 
-| Khong dung | Vi sao | Sua thanh |
+| Wrong | Why | Fix it to |
 |---|---|---|
-| "Auth hoat dong" | Khong co lenh nao chung minh | "endpoint bao ve thieu token → 401" |
-| "UI dep" | Khong quan sat khach quan duoc | "form hien loi validate ngay duoi field sai" |
-| "Xu ly loi tot" | "Tot" khong do duoc | "DB timeout → tra 503 + retry-after, khong lo stack trace" |
-| "Nhanh" | Khong co nguong | "p95 < 300ms tren 100 request tuan tu" |
-| "Da test" | Vong tron | "`npm test -- auth` xanh, phu ca 4 case tren" |
-| "Code sach" | Khong phai tieu chi feature | Bo. Do la review, khong phai `done_when`. |
+| "Auth works" | No command can prove it | "a protected endpoint with no token → 401" |
+| "The UI looks good" | Not objectively observable | "the form shows a validation error directly under the offending field" |
+| "Errors are handled well" | "Well" cannot be measured | "DB timeout → return 503 + retry-after, no stack trace leaked" |
+| "Fast" | No threshold | "p95 < 300ms over 100 sequential requests" |
+| "Tested" | Circular | "`npm test -- auth` green, covering all 4 cases above" |
+| "Clean code" | Not a feature criterion | Drop it. That is review, not `done_when`. |
 
-Viet xong moi tieu chi, tu hoi: **"lenh nao chung minh cai nay sai?"**
-Khong tra loi duoc → tieu chi do chua dung duoc.
+After writing each criterion, ask yourself: **"which command would prove this false?"**
+No answer → that criterion is not usable yet.
 
-## Nho cac case am
+## Remember the negative cases
 
-`done_when` chi liet ke duong hanh phuc la ly do refute pass o VERIFY luon tim ra loi.
-Voi feature dung toi data hoac auth, them it nhat mot tieu chi cho:
+`done_when` listing only the happy path is why the refute pass at VERIFY always finds something.
+For any feature touching data or auth, add at least one criterion for:
 
-- thieu / sai / het han token
-- data cua user khac
-- input rong / sai dinh dang / qua dai
-- goi lai lan hai (idempotency)
+- a missing / wrong / expired token
+- another user's data
+- empty / malformed / oversized input
+- calling it a second time (idempotency)
 
-## Chia feature cho dung kich thuoc
+## Sizing features correctly
 
-- **Qua to** — `done_when` hon 6–7 tieu chi, hoac `scope` cham nhieu tang khong lien quan → tach.
-- **Qua nho** — khong ship doc lap duoc, khong dang mot dossier → gop vao feature cha.
-- Thuoc do tot: **mot feature = mot dossier doc len co nghia**.
+- **Too big** — more than 6–7 `done_when` criteria, or a `scope` spanning unrelated layers → split it.
+- **Too small** — cannot ship independently, does not deserve a dossier → fold it into the parent feature.
+- A good measure: **one feature = one dossier that reads meaningfully**.
 
-## `dependencies` va thu tu
+## `dependencies` and ordering
 
-- Chi ghi phu thuoc **that**: F nay khong build/test duoc neu F kia chua xong.
-- Dung ghi phu thuoc chi vi "lam sau cho hop ly" — no khoa lich lam viec vo co.
-- Khong duoc co vong: A phu thuoc B, B phu thuoc A → tach lai.
-- `active_feature` phai tro toi mot feature co **moi** dependency da `done`/`verified`.
-  Hook dau phien se canh bao `DEPS CHUA XONG` neu sai.
+- Record only **real** dependencies: this F cannot be built or tested until that F is finished.
+- Do not record a dependency just because "it makes sense to do it later" — that locks the schedule for no reason.
+- No cycles allowed: A depends on B, B depends on A → re-split them.
+- `active_feature` must point at a feature whose **every** dependency is `done`/`verified`.
+  The session-start hook warns `DEPS NOT DONE` when it is not.
 
-## Truy vet nguoc ve Blueprint
+## Tracing back to the Blueprint
 
-Moi REQ trong Blueprint phai duoc **it nhat mot** feature cover. Kiem theo ca hai chieu:
+Every REQ in the Blueprint must be covered by **at least one** feature. Check both directions:
 
-- REQ khong feature nao cover → thieu feature, hoac REQ do la out-of-scope (ghi ro).
-- Feature khong map REQ nao → hoi Homeowner: day la scope creep hay Blueprint thieu?
+- A REQ no feature covers → a missing feature, or that REQ is out of scope (write that down).
+- A feature mapping to no REQ → ask the Homeowner: is this scope creep, or is the Blueprint incomplete?
 
-## Truoc khi ket thuc
+## Before finishing
 
-- [ ] Moi feature co `id`, `name`, `description`, `status`
-- [ ] Moi `done_when` deu dat duoc cau "lenh nao chung minh cai nay sai?"
-- [ ] Feature dung toi data/auth co it nhat 1 case am
-- [ ] `dependencies` khong vong, khong gia
-- [ ] `doc` tro dung `docs/features/<ID>-<slug>.md`
-- [ ] `active_feature` co moi dep da xong
-- [ ] Moi REQ Blueprint da map
+- [ ] Every feature has `id`, `name`, `description`, `status`
+- [ ] Every `done_when` survives the question "which command would prove this false?"
+- [ ] Features touching data/auth have at least 1 negative case
+- [ ] `dependencies` has no cycles and no fake entries
+- [ ] `doc` points correctly at `docs/features/<ID>-<slug>.md`
+- [ ] `active_feature` has all its dependencies finished
+- [ ] Every Blueprint REQ is mapped
 
 ## Red flags
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Viet `done_when` chung chung roi sau chinh" | Sau se khong chinh. Va verify se pass rong. |
-| "Feature nay hien nhien, khoi `done_when`" | Khong co tieu chi thi khong co gi de verify. |
-| "Cu code truoc, feature_list sua sau" | Sua sau = viet lai tieu chi cho khop code da lam. Nguoc. |
-| "Chia nho ra ton cong quan ly" | Feature to = dossier vo nghia + review khong noi. |
-| "Them dep cho chac" | Dep gia khoa viec vo co. Chi ghi dep that. |
-| "Blueprint mo ho nhung toi hieu y" | L2. Hoi. Doan sai o day hong ca feature. |
-| "Case am de VERIFY lo" | VERIFY se lo that, roi ban quay lai BUILD. Ghi tu bay gio. |
+| "Write `done_when` loosely now, tighten it later" | Later never comes. And verify will pass vacuously. |
+| "This feature is obvious, skip `done_when`" | No criteria means nothing to verify. |
+| "Code first, fix feature_list afterwards" | Fixing afterwards = rewriting criteria to match the code you wrote. Backwards. |
+| "Splitting costs management overhead" | A huge feature = a meaningless dossier + an unreviewable diff. |
+| "Add a dependency just to be safe" | Fake dependencies block work for no reason. Record only real ones. |
+| "The Blueprint is vague but I get the idea" | L2. Ask. Guessing wrong here ruins the whole feature. |
+| "Let VERIFY catch the negative cases" | VERIFY will catch them, and then you go back to BUILD. Write them now. |

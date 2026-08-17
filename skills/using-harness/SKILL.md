@@ -6,72 +6,72 @@ description: Only in a project whose repo root has feature_list.json (a bootstra
 # Using the harness
 
 <PRECONDITION>
-Khong co `feature_list.json` o repo root? Project nay KHONG co harness.
-Thoat skill nay ngay, noi ro mot dong "project chua bootstrap harness", roi lam viec binh thuong.
-Dung ap workflow harness len mot repo khong co harness.
+No `feature_list.json` at the repo root? This project has NO harness.
+Leave this skill immediately, say in one line "this project has no bootstrapped harness", then work normally.
+Do not impose the harness workflow on a repo that has no harness.
 </PRECONDITION>
 
 <SUBAGENT-STOP>
-Neu ban duoc dispatch lam subagent cho mot task cu the, bo qua skill nay.
+If you were dispatched as a subagent for one specific task, ignore this skill.
 </SUBAGENT-STOP>
 
 <EXTREMELY-IMPORTANT>
-Trong project co harness, **state file la su that, khong phai tri nho cua ban**.
-Neu co 1% kha nang mot gate skill duoi day ap dung, BAT BUOC invoke no truoc khi hanh dong.
+In a harness project, **the state files are the truth, not your memory**.
+If there is even a 1% chance one of the gate skills below applies, you MUST invoke it before acting.
 </EXTREMELY-IMPORTANT>
 
-## Luat cot loi
+## The core rule
 
 ```
-KHONG TUYEN BO XONG MA KHONG CO EXIT CODE
+NEVER CLAIM DONE WITHOUT AN EXIT CODE
 ```
 
-Feature chi `done` khi lenh trong `verify` cua no chay **trong luot nay** va tra exit 0.
-"Chac pass", "logic dung roi", "build truoc do xanh" — deu khong tinh.
+A feature is `done` only when the commands in its `verify` field ran **in this turn** and returned exit 0.
+"It should pass", "the logic is right", "the build was green earlier" — none of those count.
 
-## Chon gate skill
+## Choosing a gate skill
 
-| Thoi diem | Skill |
+| Moment | Skill |
 |---|---|
-| Bat dau phien / "tiep tuc di" / khong ro dang o dau | `harness-kit:harness-startup` |
-| Bien Blueprint thanh feature, hoac `done_when` mo ho | `harness-kit:planning-features` |
-| Sap viet code cho mot feature | `harness-kit:building-a-feature` |
-| Test do / verify truot / feature da ship bi hoi quy | `harness-kit:debugging-a-feature` |
-| Nghi la feature xong, sap danh `done` | `harness-kit:verifying-a-feature` |
-| Truoc SHIP, hoac dung toi auth / data / secret / input nguoi dung | `harness-kit:security-gate` |
-| Feature da qua VERIFY + SECURITY, sap ship | `harness-kit:shipping-a-feature` |
-| Viet ho so cho feature vua ship | `harness-kit:writing-feature-dossier` |
-| Ket thuc phien | `harness-kit:shipping-a-feature` (muc End of Session) |
+| Start of a session / "continue" / unsure where you are | `harness-kit:harness-startup` |
+| Turning the Blueprint into features, or a vague `done_when` | `harness-kit:planning-features` |
+| About to write code for a feature | `harness-kit:building-a-feature` |
+| A red test / a failing verify / a shipped feature regressed | `harness-kit:debugging-a-feature` |
+| You think the feature is finished, about to mark `done` | `harness-kit:verifying-a-feature` |
+| Before SHIP, or when touching auth / data / secrets / user input | `harness-kit:security-gate` |
+| A feature passed VERIFY + SECURITY and is about to ship | `harness-kit:shipping-a-feature` |
+| Writing the dossier for a feature you just shipped | `harness-kit:writing-feature-dossier` |
+| End of session | `harness-kit:shipping-a-feature` (the End of Session section) |
 
-Announce `Dung [skill] de [muc dich]` roi lam theo dung skill do. Skill co checklist → tao todo cho tung muc.
+Announce `Using [skill] to [purpose]`, then follow that skill exactly. If the skill has a checklist → create one todo per item.
 
-> Ten o tren la dang plugin. Neu harness duoc cai theo kieu project-local (`.claude/skills/`),
-> bo tien to: `harness-startup`, `building-a-feature`, ...
+> The names above are the plugin form. If the harness was installed project-locally (`.claude/skills/`),
+> drop the prefix: `harness-startup`, `building-a-feature`, ...
 
-## Ba guardrail luon bat
+## Three guardrails, always on
 
-- **`/freeze`** — dang sua bug cua F nao thi chi dung file thuoc scope F do.
-- **`/careful`** — truoc lenh pha huy (`rm -rf`, `DROP`, `force-push`, `reset --hard`): dung, hoi Homeowner.
-- **One feature at a time** — `active_feature` trong `feature_list.json` la feature duy nhat duoc dung toi.
+- **`/freeze`** — while fixing a bug in some F, touch only files inside that F's scope.
+- **`/careful`** — before a destructive command (`rm -rf`, `DROP`, `force-push`, `reset --hard`): stop and ask the Homeowner.
+- **One feature at a time** — `active_feature` in `feature_list.json` is the only feature you may touch.
 
-## Red flags — nhung cau nay nghia la ban dang tu bao chua
+## Red flags — these thoughts mean you are rationalizing
 
-| Ban nghi | Thuc te |
+| You think | Reality |
 |---|---|
-| "Viec nay nho, khong can gate" | Gate re hon mot phien debug. Invoke skill. |
-| "De toi doc code truoc da" | `harness-startup` day ban doc CAI GI truoc. Doc no truoc. |
-| "Toi nho harness noi gi roi" | Harness cua project nay co the da doi. Doc file that. |
-| "Feature nay khong co gi de test" | Vay `done_when` cua no sai. Sua `done_when`, dung bo qua verify. |
-| "Lam luon cho nhanh, gate sau" | Gate sau = khong bao gio gate. |
-| "Homeowner dang voi" | Ship do vo ton nhieu thoi gian hon gate. |
-| "Toi vua sua 1 dong thoi" | 1 dong van la diff. Diff nao cung qua SHIP gate. |
+| "This is small, it does not need the gate" | The gate is cheaper than a debugging session. Invoke the skill. |
+| "Let me read the code first" | `harness-startup` tells you WHAT to read first. Read that first. |
+| "I remember what the harness says" | This project's harness may have changed. Read the real file. |
+| "There is nothing to test in this feature" | Then its `done_when` is wrong. Fix `done_when`, do not skip verify. |
+| "Just do it quickly, gate it later" | Gate it later = never gate it. |
+| "I only changed one line" | One line is still a diff. Every diff goes through the SHIP gate. |
+| "The Homeowner is in a hurry" | Shipping something broken costs more time than the gate does. |
 
-## Thu tu uu tien
+## Priority order
 
-Gate skill di truoc skill ky thuat. `verifying-a-feature` quyet dinh *khi nao* duoc goi la xong;
-skill ngon ngu/framework quyet dinh *lam the nao*. Dung de skill thu hai lan at skill thu nhat.
+Gate skills come before technical skills. `verifying-a-feature` decides *when* something counts as finished;
+a language/framework skill decides *how*. Never let the second override the first.
 
-## Quyen uu tien cua con nguoi
+## Human override
 
-Chi thi truc tiep cua Homeowner > skill > hanh vi mac dinh. Chi bo qua workflow khi Homeowner
-noi ro rang la bo qua — khong tu suy dien tu viec ho dang voi.
+A direct instruction from the Homeowner > a skill > default behaviour. Only skip the workflow when the
+Homeowner says so explicitly — never infer it from the fact that they are in a hurry.

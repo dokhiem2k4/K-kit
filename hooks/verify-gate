@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
-# verify-gate — bien phan quyet faithfulness thanh mot canh bi CHAN, khong phai mot bao cao.
+# verify-gate — turns the faithfulness verdict into a BLOCKED action, not a report.
 #
-# eval-faithfulness.sh do duoc rang agent co danh `done` khi khong co bang chung khong.
-# Nhung do xong la xong: diem so khong ngan duoc lan sau. Hook nay dung o giua, truoc khi
-# ghi, va tu choi chinh thao tac do.
+# eval-faithfulness.sh measures whether the agent marks `done` without evidence.
+# But measuring ends there: a score cannot stop the next time. This hook sits in the middle,
+# before the write, and refuses that very action.
 #
-# Ba su kien, ba viec (dang ky trong hooks/hooks.json):
-#   post-bash   Bash chay xong -> output co "VERIFY OK" thi dat marker cho phien nay
-#                                 output co "VERIFY FAILED" thi xoa marker
-#   post-edit   sua file code   -> xoa marker (code doi thi lan verify truoc khong chung minh gi)
-#   pre-edit    sap ghi status done/verified vao feature_list.json -> khong marker thi TU CHOI
+# Three events, three jobs (registered in hooks/hooks.json):
+#   post-bash   a Bash call finished -> output contains "VERIFY OK" -> set the marker for this session
+#                                       output contains "VERIFY FAILED" -> clear the marker
+#   post-edit   a code file was edited -> clear the marker (code changed, so the last verify proves nothing)
+#   pre-edit    about to write status done/verified into feature_list.json -> no marker means REFUSE
 #
-# Marker nam trong temp, khoa theo session_id — khong ghi gi vao repo cua nguoi dung.
+# The marker lives in temp, keyed by session_id — nothing is written into the user's repo.
 #
-# FAIL OPEN co chu dich: khong co node thi hook cho qua va in canh bao ra stderr.
-# Mot gate hong ma chan sach moi thao tac ghi con te hon la khong co gate. Danh doi nay
-# duoc ghi ra day de khong ai tuong no la fail-closed.
+# FAIL OPEN is deliberate: with no node available the hook lets everything through and warns on stderr.
+# A broken gate that blocks every write is worse than no gate at all. That trade-off is written
+# down here so nobody mistakes it for fail-closed.
 
 set -uo pipefail
 MODE="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "harness-kit verify-gate: khong co node — gate KHONG hoat dong trong phien nay." >&2
+  echo "harness-kit verify-gate: no node — the gate is NOT active in this session." >&2
   exit 0
 fi
 
 MARKER_DIR="${TMPDIR:-/tmp}/harness-kit-verify"
 mkdir -p "$MARKER_DIR" 2>/dev/null || exit 0
 
-# stdin (JSON su kien) di thang vao node. Script nam o file rieng chu khong o heredoc:
-# heredoc se chiem mat stdin va node khong con doc duoc su kien.
+# stdin (the event JSON) goes straight into node. The script lives in its own file rather than
+# a heredoc: a heredoc would take over stdin and node could no longer read the event.
 exec node "$SCRIPT_DIR/verify-gate.js" "$MODE" "$MARKER_DIR"
