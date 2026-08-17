@@ -40,14 +40,19 @@ Allowed: editing text/content inside existing sections, fixing VERIFY/SECURITY i
 Not allowed (go back to VISION): adding a feature, a major layout change, changing the stack, adding a module. → L3.
 
 ## 9. SHIP — gate + docs
-Only ship when:
-- [ ] The relevant `init.sh` is **all green**.
-- [ ] `parallel-review` (subagent) — **0 confirmed P0s** on the diff.
-- [ ] The SECURITY gate passed; 0 secrets in the client bundle.
-- [ ] `feature_list.json` + `progress.md` updated (with evidence).
-- [ ] The **feature dossier** `docs/features/<ID>-<slug>.md` is finished, all 8 sections present, `feature_list.json` has the `doc` field, `./init.sh docs` is **green**. Start from `docs/features/_TEMPLATE.md`.
+Only ship when **all 8 boxes** are ticked — same granularity as `harness-kit:shipping-a-feature`,
+so the two copies can be compared mechanically rather than by eye:
+- [ ] **The relevant `init.sh` is all green** — fresh output, pasted into `progress.md`.
+- [ ] **The diff review has run** — `parallel-review` (subagent) or a manual review. **0 confirmed P0s.** Tier `lite`: skip it and state the reason.
+- [ ] **The SECURITY gate passed** — the applicable `security.md` checklist, 0 P0s.
+- [ ] **0 secrets in the client bundle** — `./init.sh secret`.
+- [ ] **State updated** — `feature_list.json` status + the `doc` field; `progress.md` holds the evidence.
+- [ ] **The dossier is finished** — `docs/features/<ID>-<slug>.md`, all 9 sections, frontmatter matching `feature_list.json`, `./init.sh docs` green. Tier `lite`: one line of evidence in `progress.md` instead. Start from `docs/features/_TEMPLATE.md`.
 - [ ] **Docs (Diataxis)** matching the diff: *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (the main flow), *Explanation* (why).
-- The commit/PR states the feature id + the REQs covered; the PR body lists the `done_when` items that passed.
+- [ ] **Commit/PR** stating the feature id + the REQs covered; the PR body lists the `done_when` items that passed.
+
+The box count is a **constant 8 at every tier**. A tier changes *how* a box is ticked, never *how many*
+there are — otherwise the count could not be pinned, and an item could be dropped without anything noticing.
 
 **Ripple:** if the feature being shipped **changes the behaviour of an older F**, you must add a dated line to **section 8 (Updates)** of that older F's dossier — inside this SHIP, never deferred. A dossier that drifts from the code is worse than no dossier.
 
@@ -55,7 +60,13 @@ Only ship when:
 - Health check after deploy.
 - Smoke test the main flow.
 - Check the infrastructure (DB advisors, logs, error rate).
-- Record the results in `progress.md`; a regression → open a new fix feature, never patch in place.
+- Record the results in `progress.md`.
+- **A regression:** open that F's dossier and read **section 9 (Rollback & Recovery)** before deciding.
+  - Revertible, and damage is spreading → roll back exactly as *How to revert* says, then open a fix feature.
+  - Something under *CANNOT be reverted* is involved → **L3, stop, ask the Homeowner.** Never decide alone.
+  - Otherwise → forward-fix: open a new fix feature, never patch in place.
+
+  This is where section 9 pays for itself: written at SHIP so it can be read during an incident.
 
 ---
 

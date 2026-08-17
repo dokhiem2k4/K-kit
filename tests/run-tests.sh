@@ -1001,5 +1001,52 @@ if [ "$mode" = "100755" ] || [ -z "$mode" ]; then ok "git index: eval-faithfulne
 else ng "git index: eval-faithfulness.sh is '$mode' (needs 100755)"; fi
 
 echo ""
+echo "== SHIP checklist drift-lock =="
+# The SHIP checklist lives in two places on two distribution channels: pipeline.md travels with
+# bootstrap, SKILL.md travels with the plugin. No single process ever holds both, so they cannot be
+# generated from one source — they are kept as two copies and locked with assertions, the same way
+# the "VERIFY OK" contract between init.sh and verify-gate is kept.
+PLS="$KIT/template/.claude/workflow/pipeline.md"
+SKS="$KIT/skills/shipping-a-feature/SKILL.md"
+ship_boxes() { grep '^- \[ \]' "$1"; }
+
+SHIP_ITEMS=(
+  "verify|init\.sh"
+  "review|review"
+  "security|SECURITY gate"
+  "secret|0 secret"
+  "state|progress\.md"
+  "dossier|[Dd]ossier"
+  "docs|Diataxis"
+  "commit|PR"
+)
+
+for item in "${SHIP_ITEMS[@]}"; do
+  key="${item%%|*}"; re="${item#*|}"
+  for f in "$PLS" "$SKS"; do
+    if ship_boxes "$f" | grep -qE -- "$re"; then
+      ok "ship item '$key' present in $(basename "$f")"
+    else
+      ng "ship item '$key' MISSING from $(basename "$f")"
+    fi
+  done
+done
+
+# The count pin is the side with teeth. Coverage checks "what I know about is present"; the count
+# checks "nothing exists that I do not know about". Add a box without declaring it here -> red.
+for f in "$PLS" "$SKS"; do
+  cnt="$(ship_boxes "$f" | wc -l | tr -d ' ')"
+  if [ "$cnt" -eq "${#SHIP_ITEMS[@]}" ]; then
+    ok "checklist box count in $(basename "$f") = ${#SHIP_ITEMS[@]}"
+  else
+    ng "checklist box count in $(basename "$f") = $cnt, expected ${#SHIP_ITEMS[@]}"
+  fi
+done
+
+# CLAUDE.md is deliberately outside the lock: it carries the Definition of Done, a different
+# granularity, not a third copy of this checklist. Only its section count is pinned.
+if grep -qF '9 sections' "$KIT/template/CLAUDE.md"; then ok "CLAUDE.md DoD says 9 sections"; else ng "CLAUDE.md DoD says 9 sections"; fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi
