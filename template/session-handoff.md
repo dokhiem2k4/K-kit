@@ -9,7 +9,7 @@
 
 ## Where things stand (restart markers)
 - **Last Updated:** {{DATE}}.
-- **Current Objective / Active feature:** F01 (not started).
+- **Active feature:** see `feature_list.json.active_feature` — also surfaced automatically by the SessionStart hook.
 - **Recommended Next Step:** scaffold per the Blueprint → `./init.sh scaffold`.
 - **Blockers:** _(keys/decisions waiting on the Homeowner)_
 - **Files:** harness files at the root + `.claude/`; no product files yet.

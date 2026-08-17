@@ -1,11 +1,12 @@
 # Progress — {{PROJECT_NAME}}
 
 > Update this whenever a feature changes state. `done` must come with **evidence** (command/test output).
+> Active feature: see `feature_list.json.active_feature` — also surfaced automatically by the
+> SessionStart hook at the top of every session.
 
 ## Current State
 - **Last Updated:** {{DATE}}.
 - **Phase:** BLUEPRINT finished → ready to BUILD.  _(update as you progress)_
-- **Current Objective / Active feature:** `F01` (pending).
 - **What has been built:** nothing yet (the repo only has the harness).
 - **Blockers:** _(list what is waiting on the Homeowner — keys, decisions...)_
 - **Recommended Next Step:** scaffold per the Blueprint → `./init.sh scaffold`.

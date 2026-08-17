@@ -1108,5 +1108,38 @@ out="$(bash "$P/init.sh" all 2>&1)"
 if printf '%s' "$out" | grep -qF "STATE ("; then ok "./init.sh all does run check_state"; else ng "./init.sh all does run check_state"; fi
 
 echo ""
+echo "== active-feature de-duplication =="
+
+P="$(new_project)"
+if grep -qF 'Current Objective / Active feature' "$P/progress.md"; then
+  ng "progress.md no longer has a fillable Active-feature field"
+else
+  ok "progress.md no longer has a fillable Active-feature field"
+fi
+if grep -qF 'feature_list.json.active_feature' "$P/progress.md"; then
+  ok "progress.md points at feature_list.json.active_feature instead"
+else
+  ng "progress.md points at feature_list.json.active_feature instead"
+fi
+
+if grep -qF 'Current Objective / Active feature' "$P/session-handoff.md"; then
+  ng "session-handoff.md no longer has a fillable Active-feature field"
+else
+  ok "session-handoff.md no longer has a fillable Active-feature field"
+fi
+if grep -qF 'feature_list.json.active_feature' "$P/session-handoff.md"; then
+  ok "session-handoff.md points at feature_list.json.active_feature instead"
+else
+  ng "session-handoff.md points at feature_list.json.active_feature instead"
+fi
+
+# "Recommended Next Step" is a judgment call, not raw data — it must survive untouched (spec YAGNI).
+if grep -qF 'Recommended Next Step' "$P/progress.md" && grep -qF 'Recommended Next Step' "$P/session-handoff.md"; then
+  ok "Recommended Next Step is untouched in both files"
+else
+  ng "Recommended Next Step is untouched in both files"
+fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi
