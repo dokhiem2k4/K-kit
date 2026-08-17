@@ -88,7 +88,7 @@ harness-kit/
 |---|---|---|
 | Instructions | `CLAUDE.md` | the startup path, invariants, definition of done |
 | State | `feature_list.json`, `progress.md`, `docs/features/<ID>-<slug>.md` | which feature, whether it is done, the evidence, and the **dossier** describing each shipped feature |
-| Verification | `init.sh` | the commands that must run before done + the secret grep + `docs` |
+| Verification | `init.sh` | the commands that must run before done + the secret grep + `docs` + `lang` |
 | Scope | `feature_list.json` deps + done_when | guards against overreach and half-finished work |
 | Lifecycle | `session-handoff.md` + End-of-Session | the next session restarts clean |
 
@@ -136,9 +136,29 @@ Closed off in three layers:
    branches that print `VERIFY OK` (some checks SKIPped / every check ran) and the tests cover **both**. A mutation test
    showed that covering only one branch leaves the other free to change while 143/143 stay green.
 
+## English only — a rule with a validator
+
+From the moment the harness is in use, every artifact is written in English: code, identifiers,
+comments, strings, command output, state files, dossiers, commit messages. The Homeowner can speak
+whatever language they like and the agent answers in kind — but what lands in the repo is English.
+
+The reason is not taste. Artifacts outlive the conversation: a `done_when`, a dossier, a comment
+naming a trap all get read by a later session, a reviewer, or whoever inherits the repo — none of
+whom share the context that made a mixed-language line feel natural at the time.
+
+It is stated in two places an agent actually reads (`CLAUDE.md` section *Language*, and the
+*guardrails* list in `using-harness`, which the SessionStart hook injects every session) and enforced
+by `./init.sh lang`, which is part of `./init.sh all`.
+
+**What the check can and cannot see.** It detects Vietnamese diacritics, which English never uses, so
+a hit is unambiguous and it names the file and line. Vietnamese written *without* diacritics is plain
+ASCII and no grep can separate it from identifiers or abbreviations. So a green `lang` result is
+evidence for one half of the rule and never proof of the whole of it — the check says so in its own
+output rather than letting a clean run be mistaken for a clean repo.
+
 ## Four test tiers
 ```bash
-bash tests/run-tests.sh                # structure  — 147 assertions, costs no tokens
+bash tests/run-tests.sh                # structure  — 156 assertions, costs no tokens
 bash tests/test-verify-gate.sh         # mechanism  — 18 assertions, feeds event JSON into the hook
 bash tests/acceptance.sh               # routing    — 5 real sessions: does it invoke the right gate skill
 bash tests/eval-faithfulness.sh        # fabrication — 5 real sessions: does it mark done with NO evidence

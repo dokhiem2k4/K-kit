@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verification runner — {{PROJECT_NAME}}
-# Usage: ./init.sh [scaffold|build|secret|docs|all]   (default: all)
+# Usage: ./init.sh [scaffold|build|secret|docs|lang|all]   (default: all)
 # CUSTOMIZE: edit the CONFIG variables + the check_build/check_secret functions for your stack.
 # Fail-fast: build/typecheck hard errors stop inside their own target (set -e semantics);
 # the runner aggregates FAIL so the remaining checks still get reported.
@@ -132,12 +132,62 @@ process.exit(bad);
 ' || FAIL=1
 }
 
+# Invariant: every artifact in this repo is written in English. See CLAUDE.md, section "Language".
+#
+# WHAT THIS CAN AND CANNOT SEE. It detects Vietnamese *diacritic* characters, which no English text
+# uses, so a hit is unambiguous. Vietnamese written WITHOUT diacritics is plain ASCII and no grep can
+# separate it from identifiers or abbreviations. So a green result is evidence of one half of the
+# rule, never proof of the whole of it — do not read it as "the repo is English".
+check_lang() {
+  step "LANGUAGE (English-only invariant)"
+  command -v node >/dev/null 2>&1 || { skip "no node — cannot check the language invariant"; return; }
+  node -e '
+const fs = require("fs");
+const path = require("path");
+// CUSTOMIZE: directories never scanned (dependencies, build output, VCS) and the extensions scanned.
+const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", ".next", "vendor", "coverage", ".venv", "__pycache__"]);
+const EXTS = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".json", ".md", ".sh", ".bash",
+                      ".yml", ".yaml", ".css", ".scss", ".html", ".py", ".go", ".rs", ".java", ".sql", ".txt", ".env"]);
+// Vietnamese-distinctive code points: the Latin Extended Additional block (U+1EA0-U+1EF9, in practice
+// only Vietnamese uses it), the letters a-breve / d-stroke / o-horn / u-horn, and the circumflex vowels.
+// Written as \u escapes on purpose: spelling the characters out would make this very line the first
+// thing the check reports.
+const VN = new RegExp("[\\u1EA0-\\u1EF9\\u0102\\u0103\\u0110\\u0111"
+                   + "\\u01A0\\u01A1\\u01AF\\u01B0\\u00C2\\u00E2\\u00CA\\u00EA\\u00D4\\u00F4]");
+const hits = [];
+const walk = (dir) => {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(p); continue; }
+    if (!EXTS.has(path.extname(e.name).toLowerCase())) continue;
+    let text;
+    try { text = fs.readFileSync(p, "utf8"); } catch { continue; }
+    text.split(/\r?\n/).forEach((line, i) => {
+      if (VN.test(line)) hits.push(p.replace(/^\.[\\\/]/, "") + ":" + (i + 1) + ": " + line.trim().slice(0, 90));
+    });
+  }
+};
+walk(".");
+if (hits.length) {
+  console.log("   [FAIL] non-English text found in " + hits.length + " line(s):");
+  for (const h of hits.slice(0, 15)) console.log("      " + h);
+  if (hits.length > 15) console.log("      ... and " + (hits.length - 15) + " more");
+  console.log("   Everything this repo contains is written in English. See CLAUDE.md, section \"Language\".");
+  process.exit(1);
+}
+console.log("   OK: 0 lines carrying non-English diacritics (does NOT prove the whole invariant)");
+' || FAIL=1
+}
+
 case "$TARGET" in
   scaffold) check_scaffold ;;
   build)    check_build ;;
   secret)   check_secret ;;
   docs)     check_docs ;;
-  all)      check_scaffold; check_build; check_secret; check_docs ;;
+  lang)     check_lang ;;
+  all)      check_scaffold; check_build; check_secret; check_docs; check_lang ;;
   *) echo "unknown target: $TARGET"; exit 2 ;;
 esac
 

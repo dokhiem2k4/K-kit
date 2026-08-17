@@ -54,6 +54,20 @@ It costs tokens → only fan out when it is worth it; do small jobs inline. Suba
 - **Contractor:** design/QC/orchestration — does NOT write code.
 - **Builder (this agent):** implements exactly the feature spec, self-tests, reports. **Stay in scope** — do NOT change the architecture or add features beyond the spec. A conflict → escalate, do not decide alone.
 
+## Language — English only, no exceptions
+From the moment this harness is in use, **everything you write is in English**: code, identifiers,
+comments, string literals, command output, `feature_list.json` fields, `progress.md`, dossiers,
+commit messages and PR bodies. This holds regardless of the language the Homeowner speaks to you in —
+answer them in their language if you like, but **the artifacts are English**.
+
+Why it is a rule and not a preference: the artifacts outlive the conversation. A dossier, a `done_when`,
+or a comment explaining a trap is read by a later session, by a reviewer, by whoever inherits the repo —
+none of whom share the context in which a mixed-language line made sense. One repo, one language.
+
+`./init.sh lang` checks this mechanically and is part of `./init.sh all`. It only detects
+Vietnamese-diacritic characters reliably; Vietnamese written without diacritics is plain ASCII and no
+grep can separate it from identifiers. **A green `lang` check is therefore not proof — you are.**
+
 ## Invariants — must never be violated (guardrails)  ← CUSTOMIZE per project
 A generic starter set (keep what applies, add what is specific to {{PROJECT_NAME}}):
 - **Secrets live only on the server/backend.** The client bundle (web/extension/mobile) contains 0 secrets — the `init.sh` grep must be clean; a feature is not done while that grep is dirty.

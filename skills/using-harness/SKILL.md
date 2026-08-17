@@ -48,8 +48,9 @@ Announce `Using [skill] to [purpose]`, then follow that skill exactly. If the sk
 > The names above are the plugin form. If the harness was installed project-locally (`.claude/skills/`),
 > drop the prefix: `harness-startup`, `building-a-feature`, ...
 
-## Three guardrails, always on
+## Four guardrails, always on
 
+- **English only** — every artifact you write is English: code, identifiers, comments, strings, output, state files, dossiers, commit messages. Reply to the Homeowner in whatever language they used; **write the artifacts in English**. `./init.sh lang` checks it.
 - **`/freeze`** — while fixing a bug in some F, touch only files inside that F's scope.
 - **`/careful`** — before a destructive command (`rm -rf`, `DROP`, `force-push`, `reset --hard`): stop and ask the Homeowner.
 - **One feature at a time** — `active_feature` in `feature_list.json` is the only feature you may touch.
@@ -65,6 +66,8 @@ Announce `Using [skill] to [purpose]`, then follow that skill exactly. If the sk
 | "Just do it quickly, gate it later" | Gate it later = never gate it. |
 | "I only changed one line" | One line is still a diff. Every diff goes through the SHIP gate. |
 | "The Homeowner is in a hurry" | Shipping something broken costs more time than the gate does. |
+| "The Homeowner wrote to me in another language, so I will answer in the code too" | Answer them in their language; the artifacts stay English. The code outlives the conversation. |
+| "Just this one comment in my own language" | One comment becomes a file becomes a repo. English only. |
 
 ## Priority order
 
