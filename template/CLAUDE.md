@@ -92,6 +92,27 @@ A generic starter set (keep what applies, add what is specific to {{PROJECT_NAME
 - **`/freeze`:** while debugging one feature, only edit files within that feature's scope.
 > Add invariants specific to {{PROJECT_NAME}} here.
 
+## Tier — grading the process cost  ← the Homeowner sets it, the agent may only RAISE it
+Every feature has a `tier` in `feature_list.json`. **Absent = `standard`.**
+
+| | `lite` | `standard` | `strict` |
+|---|---|---|---|
+| The relevant `init.sh` + secret grep | ✅ | ✅ | ✅ |
+| Dossier | ❌ (one line of evidence in `progress.md`) | ✅ | ✅ |
+| Rollback section | — | may be `—` | **must have real content** |
+| `parallel-review` | ❌ | optional | ✅ |
+| Security checklist | reduced (secret grep) | the relevant parts | full STRIDE |
+
+**Verify never skips a tier.** The first row is invariant: no tier is exempt from `init.sh`. A tier
+only changes the documentation and review cost, so a tier assigned wrongly leaves you with thin
+documentation, never with unchecked code. That is deliberate — it keeps a tier something you can get
+wrong without the system becoming unsafe.
+
+`verify-gate` blocks every write that lowers a tier, marker or no marker: lowering one is not a
+question of evidence but of authority. A new feature written with no `tier` falls back to `standard`.
+Need `lite`? That is an exemption, and an exemption needs a human signature — the Homeowner edits
+`feature_list.json`.
+
 ## Definition of Done (per feature)
 - `done` = lint + typecheck + build + test **pass** (through the relevant part of `init.sh`).
 - `secured` = passes the applicable `security.md` checklist.

@@ -371,6 +371,26 @@ done
 if grep -q 'lite' "$FLT"; then ok "feature_list.json explains the tier scale"
 else ng "feature_list.json explains the tier scale"; fi
 
+# The field exists and the gate blocks lowering it, but neither tells the agent what a tier MEANS or
+# who gets to set one. That has to be written down where an agent reads: CLAUDE.md for the semantics,
+# planning-features for the moment a tier is chosen.
+# Plain grep rather than has(): that helper is defined further down, in the instruction-wiring section.
+CMT="$KIT/template/CLAUDE.md"
+PFT="$KIT/skills/planning-features/SKILL.md"
+if grep -qF '## Tier' "$CMT"; then ok "CLAUDE.md has the Tier section"; else ng "CLAUDE.md has the Tier section"; fi
+# The load-bearing sentence of the whole tier design: a tier changes documentation cost, never
+# whether verify runs. Pin it, because a tier that could skip verify would hand back the loophole
+# verify-gate exists to close.
+if grep -qF 'no tier is exempt' "$CMT"; then ok "CLAUDE.md says no tier is exempt from init.sh"
+else ng "CLAUDE.md says no tier is exempt from init.sh"; fi
+if grep -qF 'tier' "$PFT"; then ok "planning-features covers the tier"; else ng "planning-features covers the tier"; fi
+if grep -qiF 'homeowner' "$PFT"; then ok "planning-features says who sets the tier"; else ng "planning-features says who sets the tier"; fi
+if grep -qF 'may only RAISE' "$PFT" || grep -qF 'only raise' "$PFT"; then
+  ok "planning-features states the agent may only raise a tier"
+else
+  ng "planning-features states the agent may only raise a tier"
+fi
+
 echo ""
 echo "== _TEMPLATE.md =="
 

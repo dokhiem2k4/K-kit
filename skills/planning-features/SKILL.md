@@ -107,6 +107,25 @@ Every REQ in the Blueprint must be covered by **at least one** feature. Check bo
 - [ ] `active_feature` has all its dependencies finished
 - [ ] Every Blueprint REQ is mapped
 
+## Tier — ask before writing
+
+Every new feature carries a `tier`. Ask the Homeowner one question:
+
+> "What tier is this F? `lite` (typo/docs/small refactor — no dossier), `standard` (the default),
+> or `strict` (auth/security/migration/architecture — a real Rollback section required)?"
+
+Cannot ask, or they have not answered → **do not write the field at all**. Absent means `standard`,
+and `standard` is the correct default. Guessing `lite` to save yourself work is the failure this rule exists to prevent.
+
+**You may only RAISE a tier.** `verify-gate` refuses any write that lowers one — even right after a
+green verify, because lowering a tier is a question of authority, not evidence. `lite` exempts a
+feature from the dossier and from review, so it needs a human signature: the Homeowner edits
+`feature_list.json` themselves. You raise `standard` → `strict` on your own the moment you see a
+feature touching auth, user data, secrets or migrations.
+
+No tier exempts a feature from `verify`. If you find yourself reaching for a tier to avoid running
+`init.sh`, you have misread the table in `CLAUDE.md`.
+
 ## Red flags
 
 | You think | Reality |
@@ -118,3 +137,5 @@ Every REQ in the Blueprint must be covered by **at least one** feature. Check bo
 | "Add a dependency just to be safe" | Fake dependencies block work for no reason. Record only real ones. |
 | "The Blueprint is vague but I get the idea" | L2. Ask. Guessing wrong here ruins the whole feature. |
 | "Let VERIFY catch the negative cases" | VERIFY will catch them, and then you go back to BUILD. Write them now. |
+| "This one is small, mark it `lite`" | `lite` is the Homeowner's call, not yours. Leave the field out and it defaults to `standard`. |
+| "`strict` will slow us down, use `standard`" | You may raise a tier, never lower one. The gate refuses it anyway. |
