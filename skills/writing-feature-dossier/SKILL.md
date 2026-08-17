@@ -17,6 +17,8 @@ session would otherwise have to re-read the code to learn.
 
 One feature = **exactly one** file `docs/features/<ID>-<slug>.md`. Never merged, never split.
 
+**Tier `lite` needs no dossier at all** — its evidence is one line in `progress.md`. This skill is for `standard` and `strict`.
+
 ## When to write it
 
 At the **SHIP gate**, after VERIFY + SECURITY + DEVEX have passed. Not earlier (there is no evidence yet),
@@ -25,7 +27,7 @@ not later (later never happens).
 Start by copying `docs/features/_TEMPLATE.md`. Then point the `doc` field in `feature_list.json`
 at the path you just created.
 
-## The 8 sections — exact order, exact wording
+## The 9 sections — exact order, exact wording
 
 `./init.sh docs` anchors on the headings. A section that does not apply gets `—`, **never delete the heading**.
 
@@ -39,6 +41,7 @@ at the path you just created.
 | 6 | `## 6. Pitfalls when editing` | What breaks easily, invariants to preserve, hidden dependencies | **agents** |
 | 7 | `## 7. Evidence` | Each `done_when` → how it was verified → the result; the SECURITY result | both |
 | 8 | `## 8. Updates` | A dated line, added whenever a later F changes this F's behaviour | both |
+| 9 | `## 9. Rollback & Recovery` | How to undo this, what cannot be undone, what says it is time | **agents** |
 
 ## The boundary between sections 1 and 2 — do not write it twice
 
@@ -56,8 +59,40 @@ These are the two a later session reads to save half a day:
 
 A generic section 6 is a useless section 6.
 
+## Frontmatter — 3 MIRRORED fields, 5 the dossier owns
+
+A `---` block at the top of the file. The first three are a gated copy of `feature_list.json`:
+
+| Field | Source of truth | A mismatch does |
+|---|---|---|
+| `feature` | `feature_list.json` | `./init.sh docs` FAILs |
+| `status` | `feature_list.json` | FAIL |
+| `tier` | `feature_list.json` | FAIL |
+| `date` `commit` `blueprint` `security` `reversible` | this dossier | nothing to disagree with |
+
+Change the status in `feature_list.json` and forget the frontmatter → the docs gate goes red. That is
+deliberate: the old `> **Status:** ...` line duplicated exactly the same values, and the only
+difference is that this one is checked.
+
+## Section 9 — Rollback & Recovery
+
+Three bold labels, worded exactly:
+
+- `**How to revert:**` — concrete commands or steps. **At tier `strict` this may not be `—`.**
+- `**CANNOT be reverted:**` — migrations already run, data overwritten, webhooks or emails already sent.
+- `**Signs a rollback is needed:**` — observable symptoms, concrete thresholds.
+
+The middle line is what earns the section. Forward-fix cures code; it does not cure what already
+happened. If nothing here is truly irreversible, write `—` — but think first, because this gets read
+during an incident, not during review.
+
+`reversible: false` in the frontmatter is the machine-readable form of that middle line. It does not
+block the ship; see `harness-kit:shipping-a-feature`.
+
 ## Before shipping: clean it up
 
+- [ ] All 9 sections present, in order
+- [ ] The frontmatter matches `feature_list.json` (`feature`, `status`, `tier`)
 - [ ] Every `<TODO: ...>` placeholder removed
 - [ ] Every `<!-- ... -->` guidance comment removed
 - [ ] The header carries Status / Date / Commit / Blueprint
@@ -79,6 +114,8 @@ A dossier that drifts from the code is worse than no dossier — because the nex
 |---|---|
 | "Write the dossier after shipping, it is faster" | After shipping = never. Write it inside the gate. |
 | "This section does not apply, delete the heading" | Write `—`. Deleting the heading makes `init.sh docs` FAIL. |
+| "Nothing here can break, section 9 is `—`" | At `strict` that is a FAIL. Write what a revert would actually take. |
+| "I changed the status, the dossier can catch up later" | The frontmatter mirrors it. The docs gate goes red now, not later. |
 | "Copy the description over from feature_list.json" | The dossier exists to answer what feature_list cannot. |
 | "'Be careful when editing' is enough for section 6" | Useless. Name exactly what breaks and why. |
 | "The old F is probably unaffected" | You just changed its behaviour. Add the line to section 8. |

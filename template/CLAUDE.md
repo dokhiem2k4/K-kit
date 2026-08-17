@@ -6,7 +6,7 @@ Stack: **{{STACK}}**.
 ## Source of truth
 - **Blueprint (the approved design):** `{{BLUEPRINT_PATH}}` — architecture, data model, API, flows. Do NOT change the architecture without going back to VISION.
 - **State:** `feature_list.json` (which feature is active, what is done) + `progress.md`.
-- **Feature dossier:** `docs/features/<ID>-<slug>.md` — the record of each shipped feature (8 sections: why it matters, what it does, how to use it, under the hood, decisions, pitfalls, evidence, updates). The path lives in the `doc` field in `feature_list.json`. Template: `docs/features/_TEMPLATE.md`.
+- **Feature dossier:** `docs/features/<ID>-<slug>.md` — the record of each shipped feature (9 sections: why it matters, what it does, how to use it, under the hood, decisions, pitfalls, evidence, updates, rollback). The path lives in the `doc` field in `feature_list.json`. Template: `docs/features/_TEMPLATE.md`.
 - **Extended workflow:** `.claude/workflow/pipeline.md` (the 8 vibecode-kit steps + SHIP/MONITOR/adversarial-verify/DevEx/docs).
 - **Security gate:** `.claude/workflow/security.md` (STRIDE + OWASP — CUSTOMIZE per stack).
 - **Subagents:** `.claude/workflow/subagents.md` + `.claude/workflows/*.mjs`.
@@ -39,7 +39,7 @@ No skills at all (not installed, not copied) → the rest of this file is the co
 ## Verification Commands
 - `./init.sh <target>` — lint/typecheck/build/test + a secret-leak grep. **CUSTOMIZE the targets/commands in `init.sh` for your stack.**
 - **SKIP is not a pass.** `init.sh` counts the checks that could not run and prints the count on the last line. A run that is entirely SKIPs still exits 0 — pasting it into `progress.md` as "all green" evidence is cheating. Before marking `done`: either make that check runnable, or run it by hand and paste the output.
-- `./init.sh docs` — every `done`/`verified` feature must have a valid dossier (all 8 sections, in order, no placeholders left). Included in `./init.sh all`.
+- `./init.sh docs` — every `done`/`verified` feature must have a valid dossier (all 9 sections, in order, no placeholders, frontmatter matching `feature_list.json`). Features at tier `lite` are exempt from the dossier. Included in `./init.sh all`.
 - A feature is only `done` when the relevant verify commands are **all green**; paste the output into `progress.md` as evidence.
 
 ## Subagents (multi-agent — opt-in)
@@ -116,7 +116,7 @@ Need `lite`? That is an exemption, and an exemption needs a human signature — 
 ## Definition of Done (per feature)
 - `done` = lint + typecheck + build + test **pass** (through the relevant part of `init.sh`).
 - `secured` = passes the applicable `security.md` checklist.
-- `documented` = has a dossier at `docs/features/<ID>-<slug>.md` with all 8 sections, the `doc` field pointing at it, and `./init.sh docs` green.
+- `documented` = has a dossier at `docs/features/<ID>-<slug>.md` with all 9 sections, the `doc` field pointing at it, and `./init.sh docs` green. At tier `lite`: one line of evidence in `progress.md` is enough.
 - `verified` = the Homeowner has run the real flow.
 - Never mark something done without **evidence** (logs/test output). Record it in `progress.md`.
 

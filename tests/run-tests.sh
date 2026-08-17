@@ -473,6 +473,19 @@ else
 fi
 
 echo ""
+echo "== the 9-section dossier in the instructions =="
+# The schema moved; the documents that tell an agent what to write must move with it, or the
+# validator becomes a gate nobody was told about.
+for f in "$KIT/template/CLAUDE.md" "$KIT/skills/writing-feature-dossier/SKILL.md" "$KIT/skills/shipping-a-feature/SKILL.md"; do
+  b="$(basename "$(dirname "$f")")/$(basename "$f")"
+  if grep -qE '9 (sections|muc)' "$f"; then ok "$b says 9 sections"; else ng "$b says 9 sections"; fi
+  if grep -qE '\b8 sections\b' "$f"; then ng "$b no longer says 8 sections"; else ok "$b no longer says 8 sections"; fi
+done
+if grep -qF 'frontmatter' "$KIT/skills/writing-feature-dossier/SKILL.md"; then ok "writing-feature-dossier explains the frontmatter"; else ng "writing-feature-dossier explains the frontmatter"; fi
+if grep -qF 'Rollback' "$KIT/skills/writing-feature-dossier/SKILL.md"; then ok "writing-feature-dossier covers section 9"; else ng "writing-feature-dossier covers section 9"; fi
+if grep -qiF 'reversible' "$KIT/skills/shipping-a-feature/SKILL.md"; then ok "shipping-a-feature handles reversible: false"; else ng "shipping-a-feature handles reversible: false"; fi
+
+echo ""
 echo "== _TEMPLATE.md =="
 
 P="$(new_project)"
