@@ -12,5 +12,13 @@
 # park code you did not feel like translating.
 !skip tests/run-tests.sh
 
+# .superpowers/ is the SDD working ledger — briefs, reports, and captured review diffs from earlier
+# sessions. The diffs are snapshots of code as it was, so they hold whatever that code held. It is
+# gitignored scratch, not project content, and skipping it here means the validator gives the same
+# answer whichever skip-dirs argument it happens to be invoked with.
+!skip .superpowers/
+# .worktrees/ holds checkouts of other branches; each one validates itself.
+!skip .worktrees/
+
 # No added vocabulary: harness-kit is written in English and has no domain terms to declare.
 # A real project would list its own here — see template/scripts/lang-words.txt for how.
