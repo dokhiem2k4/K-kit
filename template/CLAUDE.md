@@ -68,12 +68,18 @@ none of whom share the context in which a mixed-language line made sense. One re
 is no narrow command you can go green on while non-English text sits in the repo. It scans every text
 file (not a list of extensions) plus your **unpushed** commit messages.
 
-It looks for two things: Vietnamese diacritics, and Vietnamese vocabulary written without them
-(3 distinct words on one line — one alone is an identifier, not prose).
+It looks for diacritics, and for vocabulary written without them: 3 distinct words on one line, or 6
+across a whole file (one word alone is an identifier, not prose; the file-wide count is what catches
+text spread two words per line).
 
-It is a screen, not a proof. Vocabulary it does not know, or spread thinly enough that no single line
-reaches the threshold, still passes. **A green `lang` check is not evidence the repo is English —
-you are.**
+**`scripts/lang-words.txt` is where this project declares its own vocabulary.** The shipped list came
+from somewhere else and cannot know your domain terms, so without that file the check only sees prose —
+identifiers and short comments built from words it does not know will pass. That file also holds
+`!skip` for files whose other-language content is the point, and `!file-threshold` for the character
+table that trips the file rule legitimately.
+
+It is a screen, not a proof: vocabulary nobody declared still passes. **A green `lang` check is not
+evidence the repo is English — you are.**
 
 ## Invariants — must never be violated (guardrails)  ← CUSTOMIZE per project
 A generic starter set (keep what applies, add what is specific to {{PROJECT_NAME}}):

@@ -1,0 +1,16 @@
+# Project vocabulary for harness-kit itself — and a worked example of the file it ships.
+#
+# The template version of this file (template/scripts/lang-words.txt) goes out empty, for projects to
+# fill in. This one is real, and it exists because harness-kit hits the one case every detector hits:
+# a repo that TESTS a Vietnamese detector has to contain Vietnamese.
+#
+# tests/run-tests.sh holds the probe strings the check is asserted against. Those words are fixtures,
+# not prose — the same reason scripts/check-lang.mjs excludes itself. Rather than contorting the test
+# into unreadable string concatenation to hide from its own subject, it is skipped and said so here.
+#
+# This is the honest use of !skip: a file whose non-English content is the point. It is not a place to
+# park code you did not feel like translating.
+!skip tests/run-tests.sh
+
+# No added vocabulary: harness-kit is written in English and has no domain terms to declare.
+# A real project would list its own here — see template/scripts/lang-words.txt for how.

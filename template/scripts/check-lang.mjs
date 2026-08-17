@@ -36,20 +36,12 @@ const DIACRITIC = new RegExp("[\\u1EA0-\\u1EF9\\u0102\\u0103\\u0110\\u0111"
 // everything present in an English dictionary, then drop everything that also appears in the English
 // version of the same repo (those are identifiers and technical terms, not vocabulary).
 //
-// WHY A LINE NEEDS THREE DISTINCT HITS, not one. Individually several of these are plausible as an
-// identifier or a proper noun somewhere in the world. Requiring three different ones on the SAME line
-// is what separates prose from coincidence. Measured on 288k lines of English source (the Python
-// standard library): 1 hit flags 314 lines, 2 hits flags 12 (all of them romanised Thai in a codec
-// table), 3 hits flags 0. Measured against a real Vietnamese version of this repo, three hits still
-// catches every affected file -- 31 of 31, with no clean file flagged. So the threshold is measured,
-// not guessed, in both directions.
-//
-// The diacritic half is not perfectly silent either, and pretending otherwise would be the same sin
-// this whole check exists to prevent: on that same 288k-line corpus it flags 2 lines, both of them a
-// Latin-1 accented-character table (shlex.py). Accented letters shared with French are kept in the
-// class anyway, because dropping them would blind the check to common words like "khong" and "co".
-const MIN_HITS = 3;
-const VN_WORDS = new Set(`
+// ITS CEILING, stated because it decides what this check can promise. The list comes from ONE
+// project's vocabulary. Vietnamese has thousands of syllables, and the ones most common in commercial
+// code -- hang, don, ban, can, tong -- are ALSO English words, so they can never be signal here: keep
+// them and every English repo lights up. Domain vocabulary is therefore the project's to add, which
+// is what scripts/lang-words.txt is for.
+const BASE_WORDS = `
   ang anh bac bai bam bao bap bia bien biet binh boi
   bom bua buc buoc buoi cac cach cai canh cao cau cay
   cha chac cham chay chet chia chiem chieu chinh cho choi chon
@@ -76,20 +68,65 @@ const VN_WORDS = new Set(`
   truy tuan tuc tung tuong tuy tuyen ung uoc vai vao vay
   viec viet voi von vong vua xac xanh xay xem xin xoa
   xoay xong xuat xung xuy yeu
-`.split(/\s+/).filter(Boolean));
+`.split(/\s+/).filter(Boolean);
 
-const TOKEN = /[A-Za-z]{2,}/g;
+// WHY A LINE NEEDS THREE DISTINCT HITS, not one. Individually several of these are plausible as an
+// identifier or a proper noun somewhere in the world. Requiring three different ones on the SAME line
+// is what separates prose from coincidence. Measured on 288k lines of English source (the Python
+// standard library): 1 hit flags 314 lines, 2 hits flags 12 (all of them romanised Thai in a codec
+// table), 3 hits flags 0. Measured against a real Vietnamese version of this repo, three hits still
+// catches every affected file -- 31 of 31, with no clean file flagged.
+//
+// AND WHY THERE IS A SECOND, FILE-WIDE THRESHOLD. The per-line rule is trivially evaded by writing two
+// words per line, which was demonstrated rather than imagined. Counting distinct words across a whole
+// file closes that: four lines of two words is six distinct words, over the limit. Measured on the same
+// corpus, >=6 words per file flags 4 of 574 English files (three romanised-Thai codec tables and one
+// HTML-entity table) -- so the limit is tunable below, for the project that legitimately trips it.
+const MIN_HITS_LINE = 3;
+const DEFAULT_MIN_HITS_FILE = 6;
 
-// A line is non-English if it carries a Vietnamese diacritic, or if it carries MIN_HITS distinct
-// ASCII-Vietnamese words.
-function offence(line) {
-  if (DIACRITIC.test(line)) return "diacritics";
+// Project vocabulary + tuning. Optional; a project without it just runs on the base list.
+// Format: one word per line, # starts a comment, and two directives:
+//   !file-threshold N   raise or lower the file-wide limit
+//   !skip <fragment>    exclude any path containing <fragment> from the scan
+const CONFIG = "scripts/lang-words.txt";
+function loadProjectConfig() {
+  const out = { words: [], fileThreshold: DEFAULT_MIN_HITS_FILE, skips: [] };
+  let text;
+  try { text = fs.readFileSync(CONFIG, "utf8"); } catch { return out; }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("!file-threshold")) {
+      const n = parseInt(line.split(/\s+/)[1], 10);
+      if (Number.isFinite(n) && n > 0) out.fileThreshold = n;
+      continue;
+    }
+    if (line.startsWith("!skip")) {
+      const frag = line.slice("!skip".length).trim();
+      if (frag) out.skips.push(frag);
+      continue;
+    }
+    for (const w of line.split(/\s+/)) if (w) out.words.push(w.toLowerCase());
+  }
+  return out;
+}
+const PROJECT = loadProjectConfig();
+const WORDS = new Set([...BASE_WORDS, ...PROJECT.words]);
+
+// Tokenising splits identifiers as well as prose: tinhTongTien and tong_tien_don_hang are Vietnamese
+// just as much as a sentence is, and reading them as one opaque token was measured to miss every
+// identifier case. Splitting costs nothing in precision -- 0 flagged lines on the 288k-line corpus,
+// the same as before.
+const TOKEN = /[A-Z]?[a-z]{2,}|[A-Z]{2,}/g;
+
+function wordsIn(line) {
   const hits = new Set();
   for (const m of line.matchAll(TOKEN)) {
     const w = m[0].toLowerCase();
-    if (VN_WORDS.has(w)) hits.add(w);
+    if (WORDS.has(w)) hits.add(w);
   }
-  return hits.size >= MIN_HITS ? [...hits].sort().join(" ") : null;
+  return hits;
 }
 
 function report(hits, what, hint) {
@@ -100,6 +137,7 @@ function report(hits, what, hint) {
   process.exit(1);
 }
 
+const HINT_FILES = "Everything this repo contains is written in English. See CLAUDE.md, section \"Language\".";
 const mode = process.argv[2];
 
 // ---------------------------------------------------------------- mode: files
@@ -118,8 +156,11 @@ if (mode === "files") {
     for (const e of entries) {
       const p = path.join(dir, e.name);
       if (e.isSymbolicLink()) continue;
-      if (path.resolve(p) === SELF) continue;           // the word list is data, see SELF above
       if (e.isDirectory()) { if (!SKIP.has(e.name)) walk(p); continue; }
+      if (path.resolve(p) === SELF) continue;           // the word list is data, see SELF above
+      const rel = p.replace(/^\.[\\/]/, "");
+      if (rel === CONFIG) continue;                     // so is the project vocabulary
+      if (PROJECT.skips.some((s) => rel.includes(s))) continue;
       if (BIN.has(path.extname(e.name).toLowerCase())) continue;
       let buf;
       try {
@@ -127,30 +168,43 @@ if (mode === "files") {
         buf = fs.readFileSync(p);
       } catch { continue; }
       if (buf.includes(0)) continue;                     // binary whatever the name says
-      buf.toString("utf8").split(/\r?\n/).forEach((line, i) => {
-        const why = offence(line);
-        if (why) hits.push(p.replace(/^\.[\\/]/, "") + ":" + (i + 1) + " [" + why + "] " + line.trim().slice(0, 70));
+      const lines = buf.toString("utf8").split(/\r?\n/);
+      const across = new Set();
+      let lineHit = false;
+      lines.forEach((line, i) => {
+        if (DIACRITIC.test(line)) {
+          hits.push(rel + ":" + (i + 1) + " [diacritics] " + line.trim().slice(0, 70));
+          lineHit = true;
+          return;
+        }
+        const w = wordsIn(line);
+        for (const x of w) across.add(x);
+        if (w.size >= MIN_HITS_LINE) {
+          hits.push(rel + ":" + (i + 1) + " [" + [...w].sort().join(" ") + "] " + line.trim().slice(0, 70));
+          lineHit = true;
+        }
       });
+      // The file-wide count is what catches text spread thin enough that no single line trips.
+      if (!lineHit && across.size >= PROJECT.fileThreshold) {
+        hits.push(rel + " [" + across.size + " Vietnamese words spread across the file: "
+                  + [...across].sort().join(" ") + "]");
+      }
     }
   };
   walk(".");
-  if (hits.length) {
-    report(hits, "line(s)", "Everything this repo contains is written in English. See CLAUDE.md, section \"Language\".");
-  }
-  // Say what a green result is worth. It is a screen, not a proof: the ASCII half recognises
-  // vocabulary, so Vietnamese built from words outside this list, or spread thinly enough that no
-  // line reaches the threshold, still passes — and other languages are not modelled at all. Reading
-  // this line as "the repo is English" is exactly the mistake "SKIP is not a pass" warns about.
-  console.log("   OK: 0 non-English lines (diacritics + " + VN_WORDS.size + "-word ASCII list, >="
-              + MIN_HITS + " per line). A screen, this does NOT prove the whole invariant.");
+  if (hits.length) report(hits, "place(s)", HINT_FILES);
+  console.log("   OK: 0 non-English lines (diacritics + " + WORDS.size + " words, >=" + MIN_HITS_LINE
+              + " per line, >=" + PROJECT.fileThreshold + " per file)."
+              + " A screen, this does NOT prove the whole invariant.");
   process.exit(0);
 }
 
 // ---------------------------------------------------------------- mode: messages
 if (mode === "messages") {
-  const hits = (process.argv[3] || "").split(/\r?\n/).filter((l) => offence(l));
-  if (hits.length) {
-    report(hits.map((h) => h.trim().slice(0, 100)), "unpushed commit message line(s)",
+  const lines = (process.argv[3] || "").split(/\r?\n/);
+  const bad = lines.filter((l) => DIACRITIC.test(l) || wordsIn(l).size >= MIN_HITS_LINE);
+  if (bad.length) {
+    report(bad.map((h) => h.trim().slice(0, 100)), "unpushed commit message line(s)",
            "Reword them before pushing: git rebase -i @{u}");
   }
   console.log("   OK: unpushed commit messages are English");

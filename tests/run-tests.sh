@@ -269,6 +269,68 @@ rm -f "$P/one-word.js"
 # itself on every run — which it did, 27 lines of it, the first time this was executed.
 if grep -qF 'const SELF' "$P/scripts/check-lang.mjs"; then ok "the validator excludes itself from the scan"; else ng "the validator excludes itself from the scan"; fi
 
+# --- text spread thin enough that no single line trips ---------------------------
+# The per-line rule is trivially evaded by writing two words per line — demonstrated, not imagined.
+# Counting distinct words across a whole file is what closes it.
+node -e '
+const fs = require("fs");
+const w = ["Ham", "nay",
+           "kiem", "tra",
+           "dieu", "kien",
+           "dau", "vao"];
+const lines = [];
+for (let i = 0; i < w.length; i += 2) lines.push("// " + w[i] + " " + w[i + 1]);
+fs.writeFileSync(process.argv[1], lines.join("\n") + "\n");
+' "$(win "$P/thin.js")"
+expect_lang "text spread two words per line is caught file-wide -> fail" 1 "$P"
+out="$(bash "$P/init.sh" lang 2>&1)"
+if printf '%s' "$out" | grep -qF 'spread across the file'; then ok "the file-wide finding says it was spread, not on one line"; else ng "the file-wide finding says it was spread, not on one line"; fi
+rm -f "$P/thin.js"
+
+# --- scripts/lang-words.txt: the project's own vocabulary ------------------------
+# The shipped list came from one project and cannot cover another's domain. Without this file the
+# check only sees prose; with it, identifiers and short comments become visible too.
+WORDS_FILE="$P/scripts/lang-words.txt"
+if [ -f "$WORDS_FILE" ]; then ok "bootstrap ships scripts/lang-words.txt"; else ng "bootstrap ships scripts/lang-words.txt"; fi
+
+# An identifier built from words the shipped list does not know: invisible before, caught after.
+node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1], "const tong_tien_don_hang = 0;\n");
+' "$(win "$P/ident.js")"
+expect_lang "a domain identifier the shipped list does not know -> passes (its ceiling)" 0 "$P"
+printf '%s\n' "hang don tong" >> "$WORDS_FILE"
+expect_lang "the same identifier after the project declares its vocabulary -> fail" 1 "$P"
+rm -f "$P/ident.js"
+
+# !skip — for files whose non-English content is the point (translation catalogues, fixtures).
+node -e '
+const fs = require("fs");
+fs.mkdirSync(process.argv[1] + "/locale", { recursive: true });
+fs.writeFileSync(process.argv[1] + "/locale/vi.js", "const tong_tien_don_hang = 0;\n");
+' "$(win "$P")"
+expect_lang "a file holding another language -> fail by default" 1 "$P"
+printf '%s\n' "!skip locale/" >> "$WORDS_FILE"
+expect_lang "...and passes once the project declares !skip for it" 0 "$P"
+rm -rf "$P/locale"
+
+# !file-threshold — for the legitimate character table or proper-noun list that trips the file rule.
+node -e '
+const fs = require("fs");
+const w = ["Ham", "nay", "kiem", "tra", "dieu", "kien", "dau", "vao"];
+const lines = [];
+for (let i = 0; i < w.length; i += 2) lines.push("// " + w[i] + " " + w[i + 1]);
+fs.writeFileSync(process.argv[1], lines.join("\n") + "\n");
+' "$(win "$P/thin2.js")"
+expect_lang "the file rule fires at the default threshold -> fail" 1 "$P"
+printf '%s\n' "!file-threshold 40" >> "$WORDS_FILE"
+expect_lang "...and can be raised by the project when it misfires" 0 "$P"
+rm -f "$P/thin2.js"
+
+# The vocabulary file is a list of non-English words by definition; scanning it would flag it.
+printf '%s\n' "kiem tra dieu kien dau vao nguoi dung" >> "$WORDS_FILE"
+expect_lang "the vocabulary file is not scanned against itself -> pass" 0 "$P"
+
 # Deleting the validator must FAIL, not SKIP. A counted SKIP still prints VERIFY OK, which would mint
 # a marker and hand back the very bypass this check exists to remove.
 mv "$P/scripts/check-lang.mjs" "$P/scripts/check-lang.mjs.bak"

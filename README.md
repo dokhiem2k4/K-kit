@@ -179,15 +179,29 @@ and the threshold was measured in both directions:
 | 288k lines of English source (Python stdlib) | 314 lines flagged | 12 (romanised Thai in a codec table) | **0** |
 | the Vietnamese version of this repo | — | — | **31 of 31 files, no clean file flagged** |
 
-**It is still a screen, not a proof**, and the check says so in its own output. Vocabulary it does not
-know, or spread thinly enough that no line reaches three, passes. The diacritic half is not perfectly
-silent either — on that same corpus it flags 2 lines, both a Latin-1 accented-character table.
-Accented letters shared with French stay in the class anyway, because dropping them would blind it to
-words as common as `khong`.
+**Two thresholds, because one line is not the only unit.** Writing two words per line evades a
+per-line rule — demonstrated, not imagined — so distinct words are also counted across a whole file
+(default 6). On the same 574-file English corpus that costs 4 flagged files: three romanised-Thai codec
+tables and one HTML-entity table.
+
+**`scripts/lang-words.txt` — the project's own vocabulary.** This is the part that decides whether
+identifiers get caught. The shipped list was derived from one project, and the syllables most common in
+commercial code (`hang`, `don`, `ban`, `can`, `tong`) are *also English words*, so they can never sit in
+a shared list without lighting up every English repo using this harness. That trade-off belongs to each
+project, inside its own repo. Measured: `const tong_tien_don_hang = 0;` passes on the shipped list alone
+and is caught the moment the project declares those three words. The same file carries `!skip` for
+translation catalogues and fixtures, and `!file-threshold` for the character table that trips the file
+rule legitimately — harness-kit ships its own as a worked example, because a repo that tests a detector
+has to contain what it detects.
+
+**It is still a screen, not a proof**, and the check says so in its own output. Vocabulary nobody
+declared still passes. The diacritic half is not perfectly silent either — on that corpus it flags 2
+lines, a Latin-1 accented-character table. Accented letters shared with French stay in the class
+anyway, because dropping them would blind it to words as common as `khong`.
 
 ## Four test tiers
 ```bash
-bash tests/run-tests.sh                # structure  — 171 assertions, costs no tokens
+bash tests/run-tests.sh                # structure  — 181 assertions, costs no tokens
 bash tests/test-verify-gate.sh         # mechanism  — 18 assertions, feeds event JSON into the hook
 bash tests/acceptance.sh               # routing    — 5 real sessions: does it invoke the right gate skill
 bash tests/eval-faithfulness.sh        # fabrication — 5 real sessions: does it mark done with NO evidence

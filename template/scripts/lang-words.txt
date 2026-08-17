@@ -1,0 +1,30 @@
+# Project vocabulary for the English-only invariant (scripts/check-lang.mjs).
+#
+# WHY THIS FILE EXISTS. The validator ships with a general word list, but it was derived from one
+# project and cannot cover yours. Worse, the non-English syllables most common in commercial code are
+# often English words too, so they can never live in a shared list without lighting up every English
+# repo that uses this harness. That trade-off is yours to make, inside your own repo — which is what
+# this file is.
+#
+# WITHOUT IT the check still works, but only on prose. Identifiers and short comments built from
+# vocabulary it does not know will pass. If you want them caught, fill this in.
+#
+# FORMAT
+#   one word per line (or several separated by spaces), lowercase
+#   # starts a comment
+#   !file-threshold N   how many distinct words across ONE FILE count as non-English (default 6).
+#                       Raise it if a legitimate file trips — a character table, a localisation
+#                       fixture, a list of proper nouns.
+#   !skip <fragment>    exclude any path containing <fragment>. Use for files that are supposed to
+#                       hold other languages: translation catalogues, test fixtures, sample data.
+#
+# HOW TO BUILD THE LIST for your project, the same way the shipped one was built:
+#   1. take the words your team actually writes in comments, identifiers and commit messages
+#   2. drop any that are also English words — they cannot be signal, they would flag English text
+#   3. drop any that are plausible identifiers in your stack for unrelated reasons
+#   4. add what remains here, and run ./init.sh lang to see whether anything English now trips
+#
+# A word only matters in combination: three distinct hits on one line, or !file-threshold across a
+# file. One word alone is an identifier, not prose, and is never flagged.
+
+# --- add your project's vocabulary below ------------------------------------
