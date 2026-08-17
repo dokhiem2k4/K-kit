@@ -23,7 +23,7 @@ Suggested order (most of it is renaming/rewording; the structure stays):
 4. **`.claude/workflow/security.md`** — fill the real attack surface into the STRIDE table + the per-feature section.
 5. **`init.sh` → CONFIG** — edit `CLIENT_DIRS` + the build/test commands for your stack.
 6. **`.claude/workflows/parallel-review.mjs` → LENSES** — tune the focus to the real risks (optional).
-7. **Dossiers** — nothing to fill in up front. Each time you ship an F, copy `docs/features/_TEMPLATE.md` to `docs/features/<ID>-<slug>.md`, write all 8 sections, and point the `doc` field in `feature_list.json` at it. `./init.sh docs` blocks the ship if it is missing.
+7. **Dossiers** — nothing to fill in up front. Each time you ship an F, copy `docs/features/_TEMPLATE.md` to `docs/features/<ID>-<slug>.md`, write all 9 sections, and point the `doc` field in `feature_list.json` at it. `./init.sh docs` blocks the ship if it is missing. Features at tier `lite` are exempt.
 8. **Audit:** `bash tests/run-tests.sh` (structure) + `bash tests/acceptance.sh` (behaviour). The external validator `harness-creator/scripts/validate-harness.mjs` is **not part of this repo** — it only runs if you already have that toolkit.
 
 ## Auto-trigger — install the kit as a plugin (recommended)
@@ -75,9 +75,13 @@ harness-kit/
     ├── feature_list.json     # state: features + deps + done_when
     ├── progress.md           # state: current + evidence
     ├── session-handoff.md    # lifecycle: resuming across sessions
-    ├── init.sh               # verification: build/test + secret-leak grep + dossier check
+    ├── init.sh               # verification: build/test + secret grep + dossier + language
+    ├── scripts/
+    │   ├── check-docs.mjs    # dossier validator: 9 sections, frontmatter mirror, tier rules
+    │   ├── check-lang.mjs    # the English-only validator
+    │   └── lang-words.txt    # this project's own vocabulary (ships empty)
     ├── docs/features/
-    │   └── _TEMPLATE.md      # the 8-section dossier — copy it when you finish shipping a feature
+    │   └── _TEMPLATE.md      # the 9-section dossier — copy it when you finish shipping a feature
     └── .claude/
         ├── workflow/         # docs: pipeline, security, subagents
         └── workflows/        # runnable: adversarial-verify, parallel-review, parallel-build
@@ -88,7 +92,7 @@ harness-kit/
 |---|---|---|
 | Instructions | `CLAUDE.md` | the startup path, invariants, definition of done |
 | State | `feature_list.json`, `progress.md`, `docs/features/<ID>-<slug>.md` | which feature, whether it is done, the evidence, and the **dossier** describing each shipped feature |
-| Verification | `init.sh` | the commands that must run before done + the secret grep + `docs` + `lang` |
+| Verification | `init.sh` + `scripts/check-docs.mjs` + `scripts/check-lang.mjs` | the commands that must run before done + the secret grep + `docs` + `lang` |
 | Scope | `feature_list.json` deps + done_when | guards against overreach and half-finished work |
 | Lifecycle | `session-handoff.md` + End-of-Session | the next session restarts clean |
 
@@ -199,10 +203,79 @@ declared still passes. The diacritic half is not perfectly silent either — on 
 lines, a Latin-1 accented-character table. Accented letters shared with French stay in the class
 anyway, because dropping them would blind the check to some of the commonest words it exists to find.
 
+## Tier — grading the cost, never the evidence
+
+Fixing a typo and changing authentication do not deserve the same procedure. `feature_list.json`
+carries a `tier` per feature: `lite` < `standard` < `strict`, **absent = `standard`**, so a project
+bootstrapped before this existed needs no change.
+
+| | `lite` | `standard` | `strict` |
+|---|---|---|---|
+| The relevant `init.sh` + secret grep | ✅ | ✅ | ✅ |
+| Dossier | ❌ (evidence in `progress.md`) | ✅ 9 sections | ✅ 9 sections |
+| Section 9 Rollback | — | may be `—` | **must have real content** |
+| `parallel-review` | ❌ | optional | ✅ |
+
+The first row is the whole design: **no tier is exempt from verify.** If `lite` could skip `init.sh`,
+a `lite` feature would never mint a marker, the gate would need an exception, and that exception is
+precisely the loophole `verify-gate` exists to close. Keeping verify invariant means the `VERIFY OK`
+contract does not change by a character, and means a tier assigned wrongly costs you **thin
+documentation**, never **unchecked code**.
+
+**The agent may only raise a tier.** `verify-gate` refuses any write that lowers one, even straight
+after a green verify — lowering a tier is a question of authority, not evidence. A new feature written
+with no `tier` falls back to `standard`; writing `lite` outright is refused, because `lite` is an
+exemption and an exemption needs a human signature. Unlike the `status` rule this one **never fails
+open**: a valid path always exists (do not lower it, or ask), so refusing is a gate rather than a lock.
+
+## The dossier — 9 sections, with a frontmatter
+
+Section 9 is **Rollback & Recovery**, on three fixed labels: *How to revert*, *CANNOT be reverted*,
+*Signs a rollback is needed*. The middle one earns the section — forward-fix cures code, it does not
+cure a migration that already ran or an email already sent. `tier: strict` requires *How to revert* to
+say something real. The MONITOR step reads it on a regression: written at SHIP so it can be used
+during an incident.
+
+The frontmatter replaces the old `> **Status:** ...` line. `feature` / `status` / `tier` **mirror**
+`feature_list.json` — a mismatch is a `./init.sh docs` FAIL. The other five (`date`, `commit`,
+`blueprint`, `security`, `reversible`) belong to the dossier, so there is nothing to disagree with.
+The duplication is not new; the difference is that a gate now catches it.
+
+`reversible: false` does **not** block the ship. It is a field the agent declares itself, and a
+self-declared field must never gate itself — that only teaches the agent to write `true`. It prints
+`[WARN]`, and the stopping rule lives in `shipping-a-feature` as an L3 escalation. Its value comes at
+incident time: one grep answers "what here cannot be undone".
+
+## Drift-lock on the SHIP checklist
+
+The checklist exists in two places — `pipeline.md` ships with bootstrap, `shipping-a-feature` ships
+with the plugin — and no single process ever holds both, so it cannot be generated from one source.
+It had already drifted (6 boxes against 8) before anyone noticed. Two copies, held by assertions,
+the same shape as the `VERIFY OK` contract:
+
+- **coverage** — each of the 8 canonical items matches in *both* files
+- **a count pin** — each file has exactly 8 checkboxes
+
+Only the second has teeth: coverage proves *what I know about is present*; the count proves *nothing
+exists that I do not know about*. Both were verified by mutation, not assumed — adding an undeclared
+box turns the count red, deleting one turns coverage and the count red together.
+
+## Upgrading a project bootstrapped earlier
+
+Nothing arrives automatically: `bootstrap.mjs` never overwrites an existing file, because no upgrade
+should silently turn a running project's `init.sh` red. To take it up:
+
+```bash
+node bootstrap.mjs --target <project> --force   # overwrites init.sh, _TEMPLATE.md, scripts/
+```
+
+then re-apply your `CONFIG` edits in `init.sh`, and add the frontmatter + section 9 to dossiers you
+already have. Do nothing and the project keeps working exactly as before.
+
 ## Four test tiers
 ```bash
-bash tests/run-tests.sh                # structure  — 181 assertions, costs no tokens
-bash tests/test-verify-gate.sh         # mechanism  — 18 assertions, feeds event JSON into the hook
+bash tests/run-tests.sh                # structure  — 243 assertions, costs no tokens
+bash tests/test-verify-gate.sh         # mechanism  — 39 assertions, feeds event JSON into the hook
 bash tests/acceptance.sh               # routing    — 5 real sessions: does it invoke the right gate skill
 bash tests/eval-faithfulness.sh        # fabrication — 5 real sessions: does it mark done with NO evidence
 ACCEPTANCE_MODEL=haiku bash tests/...  # the same probes on a weaker model
@@ -234,7 +307,7 @@ It cannot answer the most important question — *does the agent actually invoke
 
 Sonnet 5/5, Haiku 5/5.
 
-Four bugs only this tier caught — none of them slipped past the 121 structural assertions:
+Four bugs only this tier caught — none of them slipped past the structural assertions:
 
 1. A `description` broad enough to pull `harness-startup` into a repo with no harness. Fixed with two fences:
    the precondition placed at the **front** of the `description`, and a `<PRECONDITION>` bail-out in the skill body.
@@ -273,7 +346,7 @@ Two signals, read independently:
 `gate-blocks` does not require the gate to fire: if the agent refuses outright, `PreToolUse` is never
 invoked, and that is a safe outcome rather than a failure. It **reports** which outcome occurred
 (`gate DID block` / `agent refused first`) so that a long run of "the gate did not fire" is never misread as
-evidence that the gate works. The **mechanical** evidence lives in `test-verify-gate.sh` — 18 deterministic assertions.
+evidence that the gate works. The **mechanical** evidence lives in `test-verify-gate.sh` — 39 deterministic assertions.
 
 `honest-pass` is the **mandatory control**: without it, a skill that refuses everything
 would score 100% while doing nothing.
