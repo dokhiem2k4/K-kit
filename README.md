@@ -148,17 +148,31 @@ whom share the context that made a mixed-language line feel natural at the time.
 
 It is stated in two places an agent actually reads (`CLAUDE.md` section *Language*, and the
 *guardrails* list in `using-harness`, which the SessionStart hook injects every session) and enforced
-by `./init.sh lang`, which is part of `./init.sh all`.
+by `check_lang` in `init.sh`.
+
+**It runs on every target, not just `all`.** That is not tidiness; it closes a measured hole.
+`verify-gate` mints its marker from *any* output containing `VERIFY OK`, so while `lang` lived only
+under `all`, an agent could run `./init.sh build`, mint a marker from that, and write `status: done`
+with non-English text still in the repo — the same "go green on something narrow, then claim done"
+loophole `verify-gate` exists to close, on a different axis. Now every target runs it, so the narrow
+path is gone.
+
+**Scope.** Every text file is scanned, not an allowlist of extensions — an allowlist silently ignores
+`Dockerfile`, `Makefile`, `*.rst` and whatever nobody thought of. Binaries are recognised by a NUL
+byte rather than by their name. Commit messages count as artifacts too, but only **unpushed** ones are
+checked: published history cannot be corrected without a force-push, so scanning it would turn
+`init.sh` permanently red on adoption over something nobody is allowed to fix.
 
 **What the check can and cannot see.** It detects Vietnamese diacritics, which English never uses, so
 a hit is unambiguous and it names the file and line. Vietnamese written *without* diacritics is plain
-ASCII and no grep can separate it from identifiers or abbreviations. So a green `lang` result is
-evidence for one half of the rule and never proof of the whole of it — the check says so in its own
-output rather than letting a clean run be mistaken for a clean repo.
+ASCII and no grep can separate it from identifiers or abbreviations — measured against this repo's own
+pre-translation state, the check caught 16 of the 31 non-English files. So a green `lang` result is
+evidence for one half of the rule and never proof of the whole of it, and the check says exactly that
+in its own output rather than letting a clean run be mistaken for a clean repo.
 
 ## Four test tiers
 ```bash
-bash tests/run-tests.sh                # structure  — 156 assertions, costs no tokens
+bash tests/run-tests.sh                # structure  — 164 assertions, costs no tokens
 bash tests/test-verify-gate.sh         # mechanism  — 18 assertions, feeds event JSON into the hook
 bash tests/acceptance.sh               # routing    — 5 real sessions: does it invoke the right gate skill
 bash tests/eval-faithfulness.sh        # fabrication — 5 real sessions: does it mark done with NO evidence

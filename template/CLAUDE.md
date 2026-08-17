@@ -64,9 +64,13 @@ Why it is a rule and not a preference: the artifacts outlive the conversation. A
 or a comment explaining a trap is read by a later session, by a reviewer, by whoever inherits the repo —
 none of whom share the context in which a mixed-language line made sense. One repo, one language.
 
-`./init.sh lang` checks this mechanically and is part of `./init.sh all`. It only detects
-Vietnamese-diacritic characters reliably; Vietnamese written without diacritics is plain ASCII and no
-grep can separate it from identifiers. **A green `lang` check is therefore not proof — you are.**
+`./init.sh lang` checks this mechanically, and it runs on **every** target, not only `all` — so there
+is no narrow command you can go green on while non-English text sits in the repo. It scans every text
+file (not a list of extensions) plus your **unpushed** commit messages.
+
+It only detects Vietnamese-diacritic characters reliably; Vietnamese written without diacritics is
+plain ASCII and no grep can separate it from identifiers. **A green `lang` check is therefore not
+proof — you are.**
 
 ## Invariants — must never be violated (guardrails)  ← CUSTOMIZE per project
 A generic starter set (keep what applies, add what is specific to {{PROJECT_NAME}}):

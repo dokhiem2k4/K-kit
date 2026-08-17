@@ -176,9 +176,54 @@ if printf '%s' "$out" | grep -qF 'vn-probe.js:1'; then ok "check_lang names the 
 rm -f "$P/vn-probe.js"
 expect_lang "removing the file makes it green again" 0 "$P"
 
-# lang must be part of `all`, otherwise it only runs when someone remembers to ask for it.
-out="$(bash "$P/init.sh" all 2>&1)"
-if printf '%s' "$out" | grep -qF "LANGUAGE"; then ok "./init.sh all runs check_lang"; else ng "./init.sh all runs check_lang"; fi
+# lang must run on EVERY target, not only `all`. This is the hole that was measured: verify-gate
+# mints its marker from ANY "VERIFY OK", so a lang confined to `all` lets an agent go green on
+# `./init.sh build` and write done with non-English text still in the repo.
+node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1], "// \u0111\u1EA7u v\u00E0o\nmodule.exports = 1;\n");
+' "$(win "$P/vn-probe.js")"
+for t in scaffold build secret docs lang all; do
+  if bash "$P/init.sh" "$t" >/dev/null 2>&1; then
+    ng "./init.sh $t goes red while non-English text exists"
+  else
+    ok "./init.sh $t goes red while non-English text exists"
+  fi
+done
+
+# ...and the consequence that actually matters: a narrow target must no longer mint a marker.
+SIDL="langgate-$$"
+rm -f "${TMPDIR:-/tmp}/harness-kit-verify/$SIDL" 2>/dev/null
+LOUT="$(bash "$P/init.sh" build 2>&1)"
+node -e '
+process.stdout.write(JSON.stringify({session_id: process.argv[1],
+  tool_input: {command: "./init.sh build"}, tool_response: process.argv[2]}));
+' "$SIDL" "$LOUT" | bash "$KIT/hooks/verify-gate" post-bash >/dev/null 2>&1
+if [ -f "${TMPDIR:-/tmp}/harness-kit-verify/$SIDL" ]; then
+  ng "a narrow target does not mint a verify marker while lang is red"
+else
+  ok "a narrow target does not mint a verify marker while lang is red"
+fi
+rm -f "${TMPDIR:-/tmp}/harness-kit-verify/$SIDL" 2>/dev/null
+rm -f "$P/vn-probe.js"
+
+# Extension-agnostic: an allowlist of extensions silently ignores whatever nobody thought of.
+node -e '
+const fs = require("fs");
+const d = process.argv[1];
+fs.writeFileSync(d + "/Dockerfile", "# C\u1EA5u h\u00ECnh\n");
+fs.writeFileSync(d + "/notes.rst", "Ghi ch\u00FA\n");
+' "$(win "$P")"
+expect_lang "files with no extension and unknown extensions are scanned too -> fail" 1 "$P"
+rm -f "$P/Dockerfile" "$P/notes.rst"
+
+# A binary file must not be misread as text and reported.
+node -e '
+const fs = require("fs");
+fs.writeFileSync(process.argv[1] + "/logo.png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 0xC3, 0xA2]));
+' "$(win "$P")"
+expect_lang "a binary file is skipped, not misread as text -> pass" 0 "$P"
+rm -f "$P/logo.png"
 
 # The check must be honest about what it cannot see: ASCII-only Vietnamese is undetectable by grep,
 # and a green result must not be sold as proof of the whole invariant.
@@ -616,6 +661,17 @@ fs.writeFileSync(d + "/package.json", JSON.stringify({ name: "t", private: true,
 fs.mkdirSync(d + "/dist", { recursive: true });          // give check_secret something to scan
 fs.writeFileSync(d + "/dist/bundle.js", "console.log(1)\n");
 ' "$(win "$P2")"
+# check_lang also inspects unpushed commit messages, and skips (counted!) when it cannot tell pushed
+# from unpushed. So a 0-SKIP fixture now needs a real repo of its own with an upstream — without it
+# this case can never reach 0 SKIP and would stop covering the "all checks ran" branch at all.
+(
+  cd "$P2" || exit 0
+  git init -q 2>/dev/null || exit 0
+  git -c user.email=t@t -c user.name=t add -A >/dev/null 2>&1
+  git -c user.email=t@t -c user.name=t commit -qm "chore: fixture baseline" >/dev/null 2>&1
+  git branch -q upstream-stub 2>/dev/null
+  git branch -q --set-upstream-to=upstream-stub >/dev/null 2>&1
+)
 out="$(bash "$P2/init.sh" all 2>&1)"
 if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "init.sh with 0 SKIP -> still prints VERIFY OK"; else ng "init.sh with 0 SKIP -> still prints VERIFY OK"; fi
 if printf '%s' "$out" | grep -qF "all checks ran"; then ok "init.sh with 0 SKIP -> reports that all checks ran"; else ng "init.sh with 0 SKIP -> reports that all checks ran"; fi
