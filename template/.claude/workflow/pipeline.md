@@ -40,7 +40,7 @@ Allowed: editing text/content inside existing sections, fixing VERIFY/SECURITY i
 Not allowed (go back to VISION): adding a feature, a major layout change, changing the stack, adding a module. → L3.
 
 ## 9. SHIP — gate + docs
-Only ship when **all 8 boxes** are ticked — same granularity as `harness-kit:shipping-a-feature`,
+Only ship when **all 9 boxes** are ticked — same granularity as `harness-kit:shipping-a-feature`,
 so the two copies can be compared mechanically rather than by eye:
 - [ ] **The relevant `init.sh` is all green** — fresh output, pasted into `progress.md`.
 - [ ] **The diff review has run** — `parallel-review` (subagent) or a manual review. **0 confirmed P0s.** Tier `lite`: skip it and state the reason.
@@ -49,9 +49,10 @@ so the two copies can be compared mechanically rather than by eye:
 - [ ] **State updated** — `feature_list.json` status + the `doc` field; `progress.md` holds the evidence.
 - [ ] **The dossier is finished** — `docs/features/<ID>-<slug>.md`, all 9 sections, frontmatter matching `feature_list.json`, `./init.sh docs` green. Tier `lite`: one line of evidence in `progress.md` instead. Start from `docs/features/_TEMPLATE.md`.
 - [ ] **Docs (Diataxis)** matching the diff: *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (the main flow), *Explanation* (why).
+- [ ] **Worktree cleaned up** — if this feature was built in `.worktrees/<slug>` and is now merged: `git worktree remove .worktrees/<slug>`. Not applicable if built directly on the branch.
 - [ ] **Commit/PR** stating the feature id + the REQs covered; the PR body lists the `done_when` items that passed.
 
-The box count is a **constant 8 at every tier**. A tier changes *how* a box is ticked, never *how many*
+The box count is a **constant 9 at every tier**. A tier changes *how* a box is ticked, never *how many*
 there are — otherwise the count could not be pinned, and an item could be dropped without anything noticing.
 
 **Ripple:** if the feature being shipped **changes the behaviour of an older F**, you must add a dated line to **section 8 (Updates)** of that older F's dossier — inside this SHIP, never deferred. A dossier that drifts from the code is worse than no dossier.

@@ -1,11 +1,12 @@
 # Progress — {{PROJECT_NAME}}
 
 > Update this whenever a feature changes state. `done` must come with **evidence** (command/test output).
+> Active feature: see `feature_list.json.active_feature` — also surfaced automatically by the
+> SessionStart hook at the top of every session.
 
 ## Current State
 - **Last Updated:** {{DATE}}.
 - **Phase:** BLUEPRINT finished → ready to BUILD.  _(update as you progress)_
-- **Current Objective / Active feature:** `F01` (pending).
 - **What has been built:** nothing yet (the repo only has the harness).
 - **Blockers:** _(list what is waiting on the Homeowner — keys, decisions...)_
 - **Recommended Next Step:** scaffold per the Blueprint → `./init.sh scaffold`.
@@ -18,6 +19,12 @@
 | F03 | Auth | F01,F02 | pending |
 
 ## Log (newest first)
+Each entry tied to a feature carries its id in the heading: `### {{DATE}} — <ID>: <title>`. Once
+that feature ships (status done/verified + dossier written), move the full entry into
+`progress-archive.md` and replace it here with a one-line pointer:
+`### {{DATE}} — <ID>: <title> (shipped — see progress-archive.md)`.
+`./init.sh state` fails if a shipped feature's entry is still here untagged.
+
 ### {{DATE}} — Harness setup
 - Stood up the harness from the harness-kit template. No product code yet.
 

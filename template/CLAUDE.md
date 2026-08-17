@@ -5,7 +5,7 @@ Stack: **{{STACK}}**.
 
 ## Source of truth
 - **Blueprint (the approved design):** `{{BLUEPRINT_PATH}}` — architecture, data model, API, flows. Do NOT change the architecture without going back to VISION.
-- **State:** `feature_list.json` (which feature is active, what is done) + `progress.md`.
+- **State:** `feature_list.json` (which feature is active, what is done) + `progress.md` (work in flight) + `progress-archive.md` (shipped feature history, moved out of `progress.md` to keep it bounded).
 - **Feature dossier:** `docs/features/<ID>-<slug>.md` — the record of each shipped feature (9 sections: why it matters, what it does, how to use it, under the hood, decisions, pitfalls, evidence, updates, rollback). The path lives in the `doc` field in `feature_list.json`. Template: `docs/features/_TEMPLATE.md`.
 - **Extended workflow:** `.claude/workflow/pipeline.md` (the 8 vibecode-kit steps + SHIP/MONITOR/adversarial-verify/DevEx/docs).
 - **Security gate:** `.claude/workflow/security.md` (STRIDE + OWASP — CUSTOMIZE per stack).
@@ -40,6 +40,7 @@ No skills at all (not installed, not copied) → the rest of this file is the co
 - `./init.sh <target>` — lint/typecheck/build/test + a secret-leak grep. **CUSTOMIZE the targets/commands in `init.sh` for your stack.**
 - **SKIP is not a pass.** `init.sh` counts the checks that could not run and prints the count on the last line. A run that is entirely SKIPs still exits 0 — pasting it into `progress.md` as "all green" evidence is cheating. Before marking `done`: either make that check runnable, or run it by hand and paste the output.
 - `./init.sh docs` — every `done`/`verified` feature must have a valid dossier (all 9 sections, in order, no placeholders, frontmatter matching `feature_list.json`). Features at tier `lite` are exempt from the dossier. Included in `./init.sh all`.
+- `./init.sh state` — every `done`/`verified` feature's Log entry in `progress.md` must be archived into `progress-archive.md`, with a one-line pointer left behind. Keeps session start-up cost bounded by features currently in flight, not by the project's age. Included in `./init.sh all`.
 - A feature is only `done` when the relevant verify commands are **all green**; paste the output into `progress.md` as evidence.
 
 ## Subagents (multi-agent — opt-in)

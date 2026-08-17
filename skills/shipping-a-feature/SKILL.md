@@ -22,6 +22,7 @@ Do not impose the harness workflow on a repo that has no harness.
 - [ ] **State updated** — `feature_list.json` status + the `doc` field; `progress.md` holds the evidence.
 - [ ] **The dossier is finished** — `docs/features/<ID>-<slug>.md` with all 9 sections and a frontmatter matching `feature_list.json`, `./init.sh docs` green. At tier `lite`: tick this with one line of evidence in `progress.md` instead, and say why. See `harness-kit:writing-feature-dossier`.
 - [ ] **Docs matching the diff (Diataxis)** — *Reference* (API/config/schema), *How-to* (setup/deploy), *Tutorial* (the main flow), *Explanation* (why). Only write the parts the diff actually touches.
+- [ ] **Worktree cleaned up** — if this feature was built in `.worktrees/<slug>` and is now merged: `git worktree remove .worktrees/<slug>`. Not applicable if built directly on the branch.
 - [ ] **Commit/PR** carrying the feature id + the REQs covered; the PR body lists the `done_when` items that passed.
 
 **Any** box still empty → do not ship. There is no "ship now, tick later".
@@ -65,7 +66,7 @@ Shipping is not the end:
 Before ending the session, even if the feature is unfinished:
 
 1. **`feature_list.json`** — a status matching reality + the `doc` field if you just shipped.
-2. **`progress.md`** — Current State + evidence (command output, not a summary).
+2. **`progress.md`** — Current State + evidence (command output, not a summary). If a feature shipped this session, move its Log entry into `progress-archive.md` and leave a one-line pointer tagged `(shipped — see progress-archive.md)` — `./init.sh state` checks this.
 3. **`session-handoff.md`** — Blockers, Files touched, **Recommended Next Step**.
    The Next Step must be concrete enough that the next session can act immediately: file names, command names, feature ids.
    "Continue F03" is not a next step.
