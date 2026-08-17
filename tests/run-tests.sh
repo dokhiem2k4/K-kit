@@ -1142,5 +1142,20 @@ else
 fi
 
 echo ""
+echo "== instruction wiring: state compaction =="
+
+CST="$KIT/template/CLAUDE.md"
+SFT="$KIT/skills/shipping-a-feature/SKILL.md"
+
+has "CLAUDE.md mentions progress-archive.md"     "$CST" "progress-archive.md"
+has "CLAUDE.md carries the ./init.sh state command" "$CST" "./init.sh state"
+has "shipping-a-feature End-of-Session mentions archiving" "$SFT" "progress-archive.md"
+
+R="$KIT/README.md"
+has "README lists progress-archive.md in the directory tree" "$R" "progress-archive.md"
+has "README lists check-state.mjs in the directory tree"     "$R" "check-state.mjs"
+has "README's subsystems table mentions the state target"    "$R" "check-state.mjs"
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi

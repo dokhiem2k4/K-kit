@@ -73,11 +73,13 @@ harness-kit/
 └── template/                 # what gets poured into the project
     ├── CLAUDE.md             # instructions: startup, invariants, DoD, subagents
     ├── feature_list.json     # state: features + deps + done_when
-    ├── progress.md           # state: current + evidence
+    ├── progress.md           # state: current + evidence (Log bounded — shipped entries move out)
+    ├── progress-archive.md   # state: archived Log entries for shipped features
     ├── session-handoff.md    # lifecycle: resuming across sessions
-    ├── init.sh               # verification: build/test + secret grep + dossier + language
+    ├── init.sh               # verification: build/test + secret grep + dossier + state + language
     ├── scripts/
     │   ├── check-docs.mjs    # dossier validator: 9 sections, frontmatter mirror, tier rules
+    │   ├── check-state.mjs   # progress.md compaction validator: shipped features must be archived
     │   ├── check-lang.mjs    # the English-only validator
     │   └── lang-words.txt    # this project's own vocabulary (ships empty)
     ├── docs/features/
@@ -91,8 +93,8 @@ harness-kit/
 | Subsystem | File | Role |
 |---|---|---|
 | Instructions | `CLAUDE.md` | the startup path, invariants, definition of done |
-| State | `feature_list.json`, `progress.md`, `docs/features/<ID>-<slug>.md` | which feature, whether it is done, the evidence, and the **dossier** describing each shipped feature |
-| Verification | `init.sh` + `scripts/check-docs.mjs` + `scripts/check-lang.mjs` | the commands that must run before done + the secret grep + `docs` + `lang` |
+| State | `feature_list.json`, `progress.md`, `progress-archive.md`, `docs/features/<ID>-<slug>.md` | which feature, whether it is done, the evidence (current + archived), and the **dossier** describing each shipped feature |
+| Verification | `init.sh` + `scripts/check-docs.mjs` + `scripts/check-state.mjs` + `scripts/check-lang.mjs` | the commands that must run before done + the secret grep + `docs` + `state` + `lang` |
 | Scope | `feature_list.json` deps + done_when | guards against overreach and half-finished work |
 | Lifecycle | `session-handoff.md` + End-of-Session | the next session restarts clean |
 
@@ -274,7 +276,7 @@ already have. Do nothing and the project keeps working exactly as before.
 
 ## Four test tiers
 ```bash
-bash tests/run-tests.sh                # structure  — 243 assertions, costs no tokens
+bash tests/run-tests.sh                # structure  — 268 assertions, costs no tokens
 bash tests/test-verify-gate.sh         # mechanism  — 39 assertions, feeds event JSON into the hook
 bash tests/acceptance.sh               # routing    — 5 real sessions: does it invoke the right gate skill
 bash tests/eval-faithfulness.sh        # fabrication — 5 real sessions: does it mark done with NO evidence

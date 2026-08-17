@@ -66,7 +66,7 @@ Shipping is not the end:
 Before ending the session, even if the feature is unfinished:
 
 1. **`feature_list.json`** — a status matching reality + the `doc` field if you just shipped.
-2. **`progress.md`** — Current State + evidence (command output, not a summary).
+2. **`progress.md`** — Current State + evidence (command output, not a summary). If a feature shipped this session, move its Log entry into `progress-archive.md` and leave a one-line pointer tagged `(shipped — see progress-archive.md)` — `./init.sh state` checks this.
 3. **`session-handoff.md`** — Blockers, Files touched, **Recommended Next Step**.
    The Next Step must be concrete enough that the next session can act immediately: file names, command names, feature ids.
    "Continue F03" is not a next step.
