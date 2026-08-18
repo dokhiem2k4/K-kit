@@ -1298,5 +1298,91 @@ else
 fi
 
 echo ""
+echo "== session-checkpoint: read path (SessionStart summary + truncate) =="
+
+P="$(new_project)"
+CF4="$(checkpoint_file "$P")"
+rm -f "$CF4"
+out="$(CLAUDE_PROJECT_DIR="$P" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
+if printf '%s' "$out" | grep -qF "since the last session-handoff.md update"; then
+  ng "no checkpoint log at all -> no warning"
+else
+  ok "no checkpoint log at all -> no warning"
+fi
+
+P="$(new_project)"
+CF5="$(checkpoint_file "$P")"
+mkdir -p "${TMPDIR:-/tmp}/harness-kit-verify"
+printf '%s\n' \
+  '{"t":"2026-08-17T09:00:00.000Z","tool":"Edit","target":"src/foo.ts"}' \
+  '{"t":"2026-08-17T09:05:00.000Z","tool":"Write","target":"session-handoff.md"}' \
+  > "$CF5"
+out="$(CLAUDE_PROJECT_DIR="$P" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
+if printf '%s' "$out" | grep -qF "since the last session-handoff.md update"; then
+  ng "last entry IS session-handoff.md -> no warning"
+else
+  ok "last entry IS session-handoff.md -> no warning"
+fi
+after_lc="$(wc -l < "$CF5" | tr -d ' ')"
+if [ "$after_lc" -eq 1 ]; then
+  ok "clean handoff -> log truncated down to just the anchor"
+else
+  ng "clean handoff -> log truncated down to just the anchor (got $after_lc lines, want 1)"
+fi
+
+P="$(new_project)"
+CF6="$(checkpoint_file "$P")"
+printf '%s\n' \
+  '{"t":"2026-08-17T09:00:00.000Z","tool":"Write","target":"session-handoff.md"}' \
+  '{"t":"2026-08-17T09:10:00.000Z","tool":"Edit","target":"src/baz.ts"}' \
+  > "$CF6"
+out="$(CLAUDE_PROJECT_DIR="$P" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
+if printf '%s' "$out" | grep -qF "since the last session-handoff.md update"; then
+  ok "an edit after the last handoff -> warns"
+else
+  ng "an edit after the last handoff -> warns"
+fi
+if printf '%s' "$out" | grep -qF "src/baz.ts"; then
+  ok "the warning names the touched file"
+else
+  ng "the warning names the touched file"
+fi
+after_lc2="$(wc -l < "$CF6" | tr -d ' ')"
+if [ "$after_lc2" -eq 2 ]; then
+  ok "a stale handoff -> log keeps the anchor plus the unreported tail"
+else
+  ng "a stale handoff -> log keeps the anchor plus the unreported tail (got $after_lc2 lines, want 2)"
+fi
+
+P="$(new_project)"
+CF7="$(checkpoint_file "$P")"
+printf '%s\n' \
+  '{"t":"2026-08-17T09:00:00.000Z","tool":"Edit","target":"src/torn.ts"' \
+  > "$CF7"
+out="$(CLAUDE_PROJECT_DIR="$P" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
+if printf '%s' "$out" | node -e '
+let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{ try { JSON.parse(s); process.exit(0); } catch { process.exit(1); } });
+' 2>/dev/null; then
+  ok "a torn/corrupted last line does not crash session-start (still valid JSON out)"
+else
+  ng "a torn/corrupted last line does not crash session-start"
+fi
+
+# Existing behavior must survive: the checkpoint block must not break what session-start already
+# injects (regression guard for the assertions already covering this at earlier lines in this file).
+P="$(new_project)"
+out="$(CLAUDE_PROJECT_DIR="$P" CLAUDE_PLUGIN_ROOT="$KIT" bash "$KIT/hooks/session-start" 2>&1)"
+if printf '%s' "$out" | node -e '
+let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const j = JSON.parse(s);
+  const ctx = j.hookSpecificOutput?.additionalContext ?? j.additionalContext;
+  if (!ctx.includes("ACTIVE: F01")) throw new Error("regression: lost the ACTIVE line");
+});' 2>/dev/null; then
+  ok "the checkpoint block does not break the existing live-state injection"
+else
+  ng "the checkpoint block does not break the existing live-state injection"
+fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi
