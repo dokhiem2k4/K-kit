@@ -790,7 +790,7 @@ if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start is executable
 # that would not run, while the tests on the original machine stayed green.
 # So check the mode in the INDEX, not on disk.
 if git -C "$KIT" rev-parse --git-dir >/dev/null 2>&1; then
-  for f in hooks/session-start tests/run-tests.sh tests/acceptance.sh template/init.sh; do
+  for f in hooks/session-start hooks/session-checkpoint tests/run-tests.sh tests/acceptance.sh template/init.sh; do
     mode="$(git -C "$KIT" ls-files -s "$f" 2>/dev/null | awk '{print $1}')"
     if [ "$mode" = "100755" ]; then ok "git index: $f is 100755"
     else ng "git index: $f is '$mode' (needs 100755 — anyone cloning could not run it)"; fi
@@ -1224,6 +1224,77 @@ if grep -qF "check_state; check_worktree" "$KIT/template/init.sh"; then
   ok "the all target runs check_worktree"
 else
   ng "the all target runs check_worktree"
+fi
+
+echo ""
+echo "== session-checkpoint: write path (PostToolUse) =="
+
+checkpoint_hash() {
+  node -e 'const c=require("crypto");const path=require("path");console.log(c.createHash("sha1").update(path.resolve(process.argv[1])).digest("hex").slice(0,16))' "$1"
+}
+checkpoint_file() {
+  echo "${TMPDIR:-/tmp}/harness-kit-verify/checkpoint-$(checkpoint_hash "$1").jsonl"
+}
+# fire_checkpoint <proj> <tool_name> <absolute-file-path>
+fire_checkpoint() {
+  node -e '
+process.stdout.write(JSON.stringify({cwd: process.argv[1], tool_name: process.argv[2],
+  tool_input: {file_path: process.argv[3]}}));
+' "$1" "$2" "$3" | bash "$KIT/hooks/session-checkpoint" >/dev/null 2>&1
+}
+
+P="$(new_project)"
+CF="$(checkpoint_file "$P")"
+rm -f "$CF"
+fire_checkpoint "$P" "Edit" "$P/src/foo.ts"
+if [ -f "$CF" ]; then ok "session-checkpoint writes a log file"; else ng "session-checkpoint writes a log file"; fi
+if grep -qF '"tool":"Edit"' "$CF" 2>/dev/null && grep -qF '"target":"src/foo.ts"' "$CF" 2>/dev/null; then
+  ok "the log line has the right tool + relative target"
+else
+  ng "the log line has the right tool + relative target"
+fi
+
+NH="$KIT/.tmp-tests/nh-checkpoint"
+rm -rf "$NH"; mkdir -p "$NH"
+NHF="$(checkpoint_file "$NH")"
+rm -f "$NHF"
+fire_checkpoint "$NH" "Edit" "$NH/foo.txt"
+if [ -f "$NHF" ]; then ng "no feature_list.json -> nothing written"; else ok "no feature_list.json -> nothing written"; fi
+rm -rf "$NH"
+
+P="$(new_project)"
+CF2="$(checkpoint_file "$P")"
+rm -f "$CF2"
+fire_checkpoint "$P" "Bash" "$P/foo.txt"
+if [ -f "$CF2" ]; then ng "Bash calls are never logged"; else ok "Bash calls are never logged"; fi
+
+P="$(new_project)"
+CF3="$(checkpoint_file "$P")"
+mkdir -p "${TMPDIR:-/tmp}/harness-kit-verify"
+node -e '
+const fs = require("fs");
+const lines = [];
+for (let i = 0; i < 500; i++) lines.push(JSON.stringify({t:"2020-01-01T00:00:00.000Z",tool:"Edit",target:"f"+i+".ts"}));
+fs.writeFileSync(process.argv[1], lines.join("\n") + "\n");
+' "$CF3"
+fire_checkpoint "$P" "Edit" "$P/new.ts"
+lc="$(wc -l < "$CF3" | tr -d ' ')"
+if [ "$lc" -gt 0 ] && [ "$lc" -le 251 ]; then
+  ok "500-line cap halves the log before appending (now $lc lines)"
+else
+  ng "500-line cap halves the log before appending (got $lc lines, want 1-251)"
+fi
+
+if node -e '
+const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+const groups = (j.hooks || {}).PostToolUse || [];
+const found = groups.some(g => g.matcher === "Edit|Write|MultiEdit" &&
+  (g.hooks || []).some(h => /session-checkpoint/.test(h.command || "")));
+process.exit(found ? 0 : 1);
+' "$KIT/hooks/hooks.json" 2>/dev/null; then
+  ok "hooks.json registers PostToolUse Edit|Write|MultiEdit -> session-checkpoint"
+else
+  ng "hooks.json registers PostToolUse Edit|Write|MultiEdit -> session-checkpoint"
 fi
 
 echo ""

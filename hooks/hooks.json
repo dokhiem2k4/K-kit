@@ -48,6 +48,17 @@
             "async": false
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-checkpoint\"",
+            "shell": "bash",
+            "async": false
+          }
+        ]
       }
     ]
   }

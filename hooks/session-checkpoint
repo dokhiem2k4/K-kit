@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# session-checkpoint — appends a breadcrumb after every Edit/Write/MultiEdit, so a later session
+# can tell which files were touched since the last session-handoff.md update.
+#
+# Registered in hooks/hooks.json under PostToolUse, matcher "Edit|Write|MultiEdit".
+#
+# Observational only: never denies anything, never blocks the tool call it fires after. The log
+# lives in temp, keyed by a hash of the project's absolute path (not session_id) — a NEW Claude
+# Code session for the SAME project must still find the PREVIOUS session's log.
+#
+# FAIL OPEN: with no node available the hook writes nothing and warns on stderr.
+
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "harness-kit session-checkpoint: no node — checkpoint logging is NOT active in this session." >&2
+  exit 0
+fi
+
+MARKER_DIR="${TMPDIR:-/tmp}/harness-kit-verify"
+mkdir -p "$MARKER_DIR" 2>/dev/null || exit 0
+
+# stdin (the event JSON) goes straight into node, same reason hooks/verify-gate does this: a
+# heredoc would take over stdin and node could no longer read the event.
+exec node "$SCRIPT_DIR/session-checkpoint.js" "$MARKER_DIR"
