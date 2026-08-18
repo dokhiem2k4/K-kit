@@ -1,7 +1,7 @@
 {
   "name": "harness-kit",
   "description": "Project harness for coding agents: feature state machine, machine-enforced gates (build/secret/dossier), STRIDE+OWASP security gate, and adversarial verify — auto-triggering skills for every pipeline gate.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "MIT",
   "keywords": [
     "harness",
