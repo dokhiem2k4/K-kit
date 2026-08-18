@@ -76,7 +76,7 @@ harness-kit/
     ├── progress.md           # state: current + evidence (Log bounded — shipped entries move out)
     ├── progress-archive.md   # state: archived Log entries for shipped features
     ├── session-handoff.md    # lifecycle: resuming across sessions
-    ├── init.sh               # verification: build/test + secret grep + dossier + state + language
+    ├── init.sh               # verification: build/test + secret grep + dossier + state + worktree hygiene + language
     ├── scripts/
     │   ├── check-docs.mjs    # dossier validator: 9 sections, frontmatter mirror, tier rules
     │   ├── check-state.mjs   # progress.md compaction validator: shipped features must be archived

@@ -1157,5 +1157,75 @@ has "README lists check-state.mjs in the directory tree"     "$R" "check-state.m
 has "README's subsystems table mentions the state target"    "$R" "check-state.mjs"
 
 echo ""
+echo "== check_worktree: merged worktrees are surfaced as a WARN, never a FAIL =="
+
+# Give the fixture its OWN git repo. .tmp-tests/ sits inside harness-kit's own working tree (it is
+# gitignored, but gitignored is not the same as "outside the repo"), so without this,
+# `git rev-parse --show-toplevel` from inside the fixture would resolve to harness-kit's OWN root,
+# and check_worktree would report harness-kit's real (still uncleaned) .worktrees/feat-tier-rollback
+# instead of the fixture's own state. Same reason the 0-SKIP fixture earlier in this file needed its
+# own `git init -q`.
+init_git_project() {
+  local p="$1"
+  ( cd "$p" && git init -q \
+      && git -c user.email=t@t -c user.name=t add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm "init" >/dev/null )
+}
+
+P="$(new_project)"
+init_git_project "$P"
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "no merged worktree left uncleaned"; then
+  ok "no worktrees beyond the current one -> OK, no warning"
+else
+  ng "no worktrees beyond the current one -> OK, no warning"
+fi
+rc=0; bash "$P/init.sh" all >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 0 ]; then ok "no worktrees -> exit 0"; else ng "no worktrees -> exit 0 (rc=$rc)"; fi
+
+P="$(new_project)"
+init_git_project "$P"
+( cd "$P" && git branch -q feat-done && git worktree add -q .worktrees/feat-done feat-done >/dev/null 2>&1 )
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "[WARN] merged worktree(s) not yet cleaned up"; then
+  ok "a merged, present worktree -> WARN"
+else
+  ng "a merged, present worktree -> WARN"
+fi
+if printf '%s' "$out" | grep -qF "feat-done"; then
+  ok "the warning names the branch"
+else
+  ng "the warning names the branch"
+fi
+rc=0; bash "$P/init.sh" all >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 0 ]; then ok "a merged worktree -> still exit 0 (never blocks)"; else ng "a merged worktree -> still exit 0 (rc=$rc)"; fi
+if printf '%s' "$out" | grep -qF "VERIFY OK"; then ok "a merged worktree -> VERIFY OK still prints"; else ng "a merged worktree -> VERIFY OK still prints"; fi
+
+P="$(new_project)"
+init_git_project "$P"
+( cd "$P" && git worktree add -q -b feat-wip .worktrees/feat-wip >/dev/null 2>&1 \
+    && cd .worktrees/feat-wip \
+    && echo "x" > newfile.txt \
+    && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "wip" >/dev/null )
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "[WARN] merged worktree(s)"; then
+  ng "an unmerged (active) worktree -> no warning"
+else
+  ok "an unmerged (active) worktree -> no warning"
+fi
+
+if grep -qF "check_worktree" "$KIT/template/init.sh"; then
+  ok "init.sh defines check_worktree"
+else
+  ng "init.sh defines check_worktree"
+fi
+if grep -qF "check_state; check_worktree" "$KIT/template/init.sh"; then
+  ok "the all target runs check_worktree"
+else
+  ng "the all target runs check_worktree"
+fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi

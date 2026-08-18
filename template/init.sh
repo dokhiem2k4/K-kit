@@ -131,10 +131,51 @@ check_state() {
   node scripts/check-state.mjs || FAIL=1
 }
 
+# Repo hygiene: a worktree whose branch is already merged should have been removed at SHIP
+# (see shipping-a-feature's checklist). This only WARNS — a stale worktree may belong to
+# other work in progress, unrelated to the feature currently being verified.
+check_worktree() {
+  step "WORKTREE (merged worktrees not yet cleaned up)"
+  command -v git >/dev/null 2>&1 || { skip "no git — cannot check worktree cleanliness"; return; }
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { skip "not a git repository"; return; }
+
+  local current here stale=""
+  current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+  here="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+
+  # Plain `git worktree list` — one line per worktree: "<path> <sha> [<branch>]", or
+  # "(detached HEAD)"/"(bare)" in place of the bracketed branch. Deliberately NOT --porcelain:
+  # its multi-line blocks were the first draft of this check and were verified WRONG against a
+  # real multi-worktree repo during this check's own design (the line after "worktree <path>" is
+  # "HEAD <sha>", not "branch ..." — an off-by-one that would have silently matched nothing).
+  # The single-line plain format has no such trap.
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    wpath="$(printf '%s\n' "$line" | awk '{print $1}')"
+    [ "$wpath" = "$here" ] && continue                        # never flag the worktree we are running from
+    wbranch="$(printf '%s\n' "$line" | sed -n 's/.*\[\(.*\)\]$/\1/p')"
+    [ -z "$wbranch" ] && continue                             # detached/bare — not ours to judge
+    # git branch --merged prefixes the CURRENT worktree's branch with "* " but a branch checked
+    # out in ANOTHER linked worktree with "+ " (verified against this repo's own two worktrees
+    # during this check's design — a sed pattern stripping only "* " leaves the "+ " row never
+    # matching, silently hiding every merged worktree from detection).
+    if git branch --merged "$current" 2>/dev/null | sed 's/^[*+ ] //' | grep -qxF "$wbranch"; then
+      stale="${stale}  $wpath (branch: $wbranch)\n"
+    fi
+  done < <(git worktree list 2>/dev/null)
+
+  if [ -n "$stale" ]; then
+    printf '   [WARN] merged worktree(s) not yet cleaned up:\n%b' "$stale"
+    echo "   Run: git worktree remove <path>   (see shipping-a-feature's SHIP checklist)"
+  else
+    echo "   OK: no merged worktree left uncleaned"
+  fi
+}
+
 # Invariant: every artifact in this repo is written in English. See CLAUDE.md, section "Language".
 # The detection itself lives in scripts/check-lang.mjs; this function decides WHAT gets checked.
 # CUSTOMIZE: directories never scanned, and the size ceiling for a single file.
-LANG_SKIP_DIRS=".git node_modules dist build .next out target vendor coverage .venv __pycache__ .tmp-tests"
+LANG_SKIP_DIRS=".git node_modules dist build .next out target vendor coverage .venv __pycache__ .tmp-tests .worktrees"
 LANG_MAX_KB=512
 check_lang() {
   step "LANGUAGE (English-only invariant)"
@@ -175,7 +216,7 @@ case "$TARGET" in
   docs)     check_docs ;;
   state)    check_state ;;
   lang)     : ;;                 # nothing extra — the unconditional run below is the whole target
-  all)      check_scaffold; check_build; check_secret; check_docs; check_state ;;
+  all)      check_scaffold; check_build; check_secret; check_docs; check_state; check_worktree ;;
   *) echo "unknown target: $TARGET"; exit 2 ;;
 esac
 
