@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# usage-ledger — appends a cumulative token-usage snapshot after every agent turn (Stop event).
+#
+# Registered in hooks/hooks.json under Stop (Stop supports no matcher — see hooks.json comment).
+#
+# Reads transcript_path (given in the event JSON), sums every message.usage object found, and
+# appends ONE row representing this session's running total as of now — not a delta.
+#
+# The transcript's usage schema is NOT a documented public contract (verified empirically against
+# a real transcript, not found in official docs). If the expected shape ever disappears, this hook
+# writes nothing rather than wrong numbers — see usage-ledger.js.
+#
+# FAIL OPEN: with no node available the hook writes nothing and warns on stderr.
+
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "harness-kit usage-ledger: no node — usage tracking is NOT active in this session." >&2
+  exit 0
+fi
+
+# stdin (the event JSON) goes straight into node, same reason hooks/verify-gate does this: a
+# heredoc would take over stdin and node could no longer read the event.
+exec node "$SCRIPT_DIR/usage-ledger.js"

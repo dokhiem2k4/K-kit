@@ -790,7 +790,7 @@ if [ -x "$KIT/hooks/session-start" ]; then ok "hooks/session-start is executable
 # that would not run, while the tests on the original machine stayed green.
 # So check the mode in the INDEX, not on disk.
 if git -C "$KIT" rev-parse --git-dir >/dev/null 2>&1; then
-  for f in hooks/session-start hooks/session-checkpoint tests/run-tests.sh tests/acceptance.sh template/init.sh; do
+  for f in hooks/session-start hooks/session-checkpoint hooks/usage-ledger tests/run-tests.sh tests/acceptance.sh template/init.sh; do
     mode="$(git -C "$KIT" ls-files -s "$f" 2>/dev/null | awk '{print $1}')"
     if [ "$mode" = "100755" ]; then ok "git index: $f is 100755"
     else ng "git index: $f is '$mode' (needs 100755 — anyone cloning could not run it)"; fi
@@ -1381,6 +1381,67 @@ let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
   ok "the checkpoint block does not break the existing live-state injection"
 else
   ng "the checkpoint block does not break the existing live-state injection"
+fi
+
+echo ""
+echo "== usage-ledger: write path (Stop) =="
+
+# fire_usage <proj> <transcript-path> <session-id>
+fire_usage() {
+  node -e '
+process.stdout.write(JSON.stringify({cwd: process.argv[1], transcript_path: process.argv[2], session_id: process.argv[3]}));
+' "$1" "$2" "$3" | bash "$KIT/hooks/usage-ledger" >/dev/null 2>&1
+}
+
+mkdir -p "$KIT/.tmp-tests"
+TR="$KIT/.tmp-tests/transcript-known.jsonl"
+node -e '
+const fs = require("fs");
+const lines = [
+  JSON.stringify({message:{usage:{input_tokens:10,output_tokens:20,cache_read_input_tokens:30,cache_creation_input_tokens:40}}}),
+  JSON.stringify({message:{usage:{input_tokens:1,output_tokens:2,cache_read_input_tokens:3,cache_creation_input_tokens:4}}}),
+  JSON.stringify({message:{role:"user"}}),
+];
+fs.writeFileSync(process.argv[1], lines.join("\n") + "\n");
+' "$TR"
+
+P="$(new_project)"
+LEDGER="$P/.claude/usage-ledger.jsonl"
+rm -f "$LEDGER"
+fire_usage "$P" "$TR" "sess-known"
+if [ -f "$LEDGER" ]; then ok "usage-ledger writes a row"; else ng "usage-ledger writes a row"; fi
+if grep -qF '"input":11' "$LEDGER" 2>/dev/null && grep -qF '"output":22' "$LEDGER" 2>/dev/null \
+   && grep -qF '"cacheRead":33' "$LEDGER" 2>/dev/null && grep -qF '"cacheCreation":44' "$LEDGER" 2>/dev/null; then
+  ok "the row sums usage across every message correctly (10+1, 20+2, 30+3, 40+4)"
+else
+  ng "the row sums usage across every message correctly"
+fi
+if grep -qF '"sessionId":"sess-known"' "$LEDGER" 2>/dev/null; then ok "the row carries the session id"; else ng "the row carries the session id"; fi
+
+TR2="$KIT/.tmp-tests/transcript-nousage.jsonl"
+printf '%s\n' '{"message":{"role":"user","content":"hi"}}' '{"not":"an assistant message"}' > "$TR2"
+P="$(new_project)"
+LEDGER2="$P/.claude/usage-ledger.jsonl"
+rm -f "$LEDGER2"
+fire_usage "$P" "$TR2" "sess-nousage"
+if [ -f "$LEDGER2" ]; then ng "a transcript with no usage objects -> nothing written"; else ok "a transcript with no usage objects -> nothing written"; fi
+
+NH="$KIT/.tmp-tests/nh-usage"
+rm -rf "$NH"; mkdir -p "$NH"
+NHLEDGER="$NH/.claude/usage-ledger.jsonl"
+fire_usage "$NH" "$TR" "sess-noharness"
+if [ -f "$NHLEDGER" ]; then ng "no feature_list.json -> nothing written"; else ok "no feature_list.json -> nothing written"; fi
+rm -rf "$NH"
+
+if node -e '
+const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+const groups = (j.hooks || {}).Stop || [];
+const found = groups.some(g => (g.hooks || []).some(h => /usage-ledger/.test(h.command || "")));
+process.exit(found ? 0 : 1);
+' "$KIT/hooks/hooks.json" 2>/dev/null; then
+  ok "hooks.json registers Stop -> usage-ledger"
+else
+  ng "hooks.json registers Stop -> usage-ledger"
 fi
 
 echo ""
