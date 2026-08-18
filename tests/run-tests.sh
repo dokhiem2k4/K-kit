@@ -1445,5 +1445,55 @@ else
 fi
 
 echo ""
+echo "== usage-ledger: .gitignore coverage (check_secret) =="
+
+# Reuses init_git_project(), already defined earlier in this file by the check_worktree tests —
+# needed for the same reason: .tmp-tests/ sits inside harness-kit's own working tree, so without a
+# repo of its own, git check-ignore would resolve against harness-kit's OWN .gitignore instead of
+# the fixture's.
+
+P="$(new_project)"
+init_git_project "$P"
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "usage-ledger.jsonl exists but is not gitignored"; then
+  ng "ledger file does not exist yet -> no warning"
+else
+  ok "ledger file does not exist yet -> no warning"
+fi
+
+# Simulates the real case this check exists for: a project that already had its OWN .gitignore
+# before adopting harness-kit, so bootstrap.mjs's non-clobbering rule skipped ours (bootstrap.mjs:97).
+P="$(new_project)"
+rm -f "$P/.gitignore"
+init_git_project "$P"
+mkdir -p "$P/.claude"
+echo '{"t":"x"}' > "$P/.claude/usage-ledger.jsonl"
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "usage-ledger.jsonl exists but is not gitignored"; then
+  ok "ledger exists + no .gitignore coverage -> WARN"
+else
+  ng "ledger exists + no .gitignore coverage -> WARN"
+fi
+rc=0; bash "$P/init.sh" all >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 0 ]; then ok "the .gitignore warning never blocks (still exit 0)"; else ng "the .gitignore warning never blocks (rc=$rc)"; fi
+
+P="$(new_project)"
+init_git_project "$P"
+if [ -f "$P/.gitignore" ]; then ok "bootstrap ships a .gitignore"; else ng "bootstrap ships a .gitignore"; fi
+if grep -qF '.claude/usage-ledger.jsonl' "$P/.gitignore" 2>/dev/null; then
+  ok "the shipped .gitignore covers the ledger path"
+else
+  ng "the shipped .gitignore covers the ledger path"
+fi
+mkdir -p "$P/.claude"
+echo '{"t":"x"}' > "$P/.claude/usage-ledger.jsonl"
+out="$(bash "$P/init.sh" all 2>&1)"
+if printf '%s' "$out" | grep -qF "usage-ledger.jsonl exists but is not gitignored"; then
+  ng "a project whose .gitignore already covers it -> no warning"
+else
+  ok "a project whose .gitignore already covers it -> no warning"
+fi
+
+echo ""
 echo "PASS=$PASSED  FAIL=$FAILED"
 if [ "$FAILED" -eq 0 ]; then exit 0; else exit 1; fi

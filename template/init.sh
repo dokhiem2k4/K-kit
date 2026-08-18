@@ -92,8 +92,25 @@ check_secret() {
       echo "   [FAIL] SECRET in $d — must NOT ship"; found=1
     fi
   done
-  [ "$scanned" -eq 0 ] && { skip "no client bundle to scan yet (${CLIENT_DIRS[*]})"; return; }
-  [ "$found" -eq 1 ] && FAIL=1 || echo "   OK: 0 secrets in the client bundle"
+  if [ "$scanned" -eq 0 ]; then
+    skip "no client bundle to scan yet (${CLIENT_DIRS[*]})"
+  elif [ "$found" -eq 1 ]; then
+    FAIL=1
+  else
+    echo "   OK: 0 secrets in the client bundle"
+  fi
+
+  # The usage ledger (.claude/usage-ledger.jsonl) must never reach a commit — it is local session
+  # cost data, not something the harness ships. WARN, not FAIL: a missing .gitignore line is a
+  # hygiene issue, not proof the current feature's code is wrong (same reasoning as check_worktree).
+  # Always runs, regardless of which client-bundle branch above fired — this check is independent
+  # of whether there was a client bundle to scan at all.
+  if [ -f .claude/usage-ledger.jsonl ] && command -v git >/dev/null 2>&1 \
+     && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if ! git check-ignore -q .claude/usage-ledger.jsonl 2>/dev/null; then
+      echo "   [WARN] .claude/usage-ledger.jsonl exists but is not gitignored — add it to .gitignore"
+    fi
+  fi
 }
 
 # Every done/verified feature must have a dossier at docs/features/<ID>-<slug>.md.
